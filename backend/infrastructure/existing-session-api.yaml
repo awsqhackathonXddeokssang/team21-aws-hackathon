@@ -149,6 +149,27 @@ Resources:
       ParentId: !GetAtt SessionApi.RootResourceId
       PathPart: 'recipe-image'
 
+  # Gateway Responses for Global CORS
+  GatewayResponse4XX:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      RestApiId: !Ref SessionApi
+      ResponseType: DEFAULT_4XX
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Requested-With'"
+
+  GatewayResponse5XX:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      RestApiId: !Ref SessionApi
+      ResponseType: DEFAULT_5XX
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Requested-With'"
+
   # Methods
   SessionsPostMethod:
     Type: AWS::ApiGateway::Method
@@ -162,6 +183,30 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SessionCreateFunction.Arn}/invocations'
 
+  SessionsOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref SessionApi
+      ResourceId: !Ref SessionsResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Requested-With'"
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: false
+            method.response.header.Access-Control-Allow-Methods: false
+            method.response.header.Access-Control-Allow-Headers: false
+
   SessionGetMethod:
     Type: AWS::ApiGateway::Method
     Properties:
@@ -173,6 +218,30 @@ Resources:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
         Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SessionCreateFunction.Arn}/invocations'
+
+  SessionIdOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref SessionApi
+      ResourceId: !Ref SessionIdResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Requested-With'"
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: false
+            method.response.header.Access-Control-Allow-Methods: false
+            method.response.header.Access-Control-Allow-Headers: false
 
   ProfilePutMethod:
     Type: AWS::ApiGateway::Method
@@ -186,6 +255,30 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SessionCreateFunction.Arn}/invocations'
 
+  ProfileOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref SessionApi
+      ResourceId: !Ref ProfileResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Requested-With'"
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: false
+            method.response.header.Access-Control-Allow-Methods: false
+            method.response.header.Access-Control-Allow-Headers: false
+
   RecipeImagePostMethod:
     Type: AWS::ApiGateway::Method
     Properties:
@@ -197,6 +290,30 @@ Resources:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
         Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SessionCreateFunction.Arn}/invocations'
+
+  RecipeImageOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref SessionApi
+      ResourceId: !Ref RecipeImageResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Requested-With'"
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: false
+            method.response.header.Access-Control-Allow-Methods: false
+            method.response.header.Access-Control-Allow-Headers: false
 
   # CORS OPTIONS Methods
   SessionsOptionsMethod:
@@ -321,11 +438,16 @@ Resources:
     Type: AWS::ApiGateway::Deployment
     DependsOn:
       - SessionsPostMethod
-      - SessionGetMethod
-      - ProfilePutMethod
-      - RecipeImagePostMethod
       - SessionsOptionsMethod
+      - SessionGetMethod
       - SessionIdOptionsMethod
+      - ProfilePutMethod
+      - ProfileOptionsMethod
+      - RecipeImagePostMethod
+      - RecipeImageOptionsMethod
+    Properties:
+      RestApiId: !Ref SessionApi
+      StageName: !Ref Environment
       - ProfileOptionsMethod
       - RecipeImageOptionsMethod
     Properties:
