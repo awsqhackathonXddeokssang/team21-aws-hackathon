@@ -34,6 +34,40 @@ Resources:
                 Action:
                   - states:StartExecution
                 Resource: 'arn:aws:states:*:*:stateMachine:ai-chef-workflow'
+        - PolicyName: BedrockAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource: '*'
+
+  # Session Update Profile Lambda Function
+  SessionUpdateProfileLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: 'session-update-profile'
+      Runtime: nodejs18.x
+      Handler: index.handler
+      Role: !GetAtt SessionLambdaRole.Arn
+      Timeout: 30
+      MemorySize: 256
+      Environment:
+        Variables:
+          SESSIONS_TABLE_NAME: 'ai-chef-sessions'
+      Code:
+        ZipFile: |
+          exports.handler = async (event) => {
+              return {
+                  statusCode: 200,
+                  headers: {
+                      'Access-Control-Allow-Origin': '*',
+                      'Content-Type': 'application/json'
+                  },
+                  body: JSON.stringify({ message: 'Session update profile placeholder' })
+              };
+          };
 
   # Session Lambda Function
   SessionLambda:
@@ -185,6 +219,14 @@ Resources:
       ParentId: !GetAtt ApiGateway.RootResourceId
       PathPart: 'sessions'
 
+  # Sessions Update Resource
+  SessionsUpdateResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !Ref SessionsResource
+      PathPart: 'update'
+
   # Session Resource
   SessionResource:
     Type: AWS::ApiGateway::Resource
@@ -268,6 +310,48 @@ Resources:
             method.response.header.Access-Control-Allow-Methods: false
             method.response.header.Access-Control-Allow-Origin: false
 
+  # Sessions Update POST Method
+  SessionsUpdatePostMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref SessionsUpdateResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SessionUpdateProfileLambda.Arn}/invocations'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: false
+
+  # Sessions Update OPTIONS Method for CORS
+  SessionsUpdateOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref SessionsUpdateResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: false
+            method.response.header.Access-Control-Allow-Methods: false
+            method.response.header.Access-Control-Allow-Origin: false
+
   # POST Method
   ProcessMethod:
     Type: AWS::ApiGateway::Method
@@ -312,6 +396,15 @@ Resources:
             method.response.header.Access-Control-Allow-Methods: false
             method.response.header.Access-Control-Allow-Origin: false
 
+  # Lambda Permission for API Gateway - Sessions Update
+  LambdaApiGatewaySessionsUpdatePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref SessionUpdateProfileLambda
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/POST/sessions/update'
+
   # Lambda Permission for API Gateway - Sessions
   LambdaApiGatewaySessionsPermission:
     Type: AWS::Lambda::Permission
@@ -346,6 +439,8 @@ Resources:
       - SessionsGetMethod
       - SessionsPostMethod
       - SessionsOptionsMethod
+      - SessionsUpdatePostMethod
+      - SessionsUpdateOptionsMethod
       - ProcessMethod
       - ProcessOptionsMethod
     Properties:
