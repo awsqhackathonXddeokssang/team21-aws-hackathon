@@ -809,7 +809,7 @@ export default function ChatScreen() {
   };
 
   return (
-    <div className="h-full bg-white flex flex-col">
+    <div className="h-screen bg-white flex flex-col">
       {/* 로딩 화면 */}
       {showResult && isLoading && (
         <div className="flex-1 flex items-center justify-center bg-gradient-to-br from-orange-50 to-orange-100">
@@ -986,7 +986,7 @@ export default function ChatScreen() {
               )}
 
               {activeTab === 'shopping' && (
-                <div className="pb-20">
+                <div>
                   {currentRecipe?.ingredients ? (
                     <div className="space-y-4">
                       <h4 className="font-semibold text-gray-800 mb-4">필요한 재료</h4>
@@ -1042,7 +1042,7 @@ export default function ChatScreen() {
                   )}
                   
                   {/* 고정된 하단 총액 표시 */}
-                  <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 shadow-lg">
+                  <div className="sticky bottom-0 z-10 bg-white border-t border-gray-200 p-4 shadow-lg">
                     <div className="max-w-2xl mx-auto flex justify-between items-center">
                       <div>
                         <p className="text-sm text-gray-600">
