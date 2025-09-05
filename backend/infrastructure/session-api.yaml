@@ -41,7 +41,7 @@ Resources:
     Properties:
       FunctionName: 'ai-chef-session-api'
       Runtime: python3.11
-      Handler: lambda_function.lambda_handler
+      Handler: index.lambda_handler
       Role: !GetAtt SessionLambdaRole.Arn
       Timeout: 30
       MemorySize: 256
