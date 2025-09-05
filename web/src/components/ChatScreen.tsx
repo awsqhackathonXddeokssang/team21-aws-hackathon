@@ -310,6 +310,8 @@ export default function ChatScreen() {
               </div>
             </div>
           </div>
+        )}
+
         {/* 텍스트 입력 UI */}
         {shouldShowTextInput && !isLoading && (
           <div className="flex justify-start ml-2">
