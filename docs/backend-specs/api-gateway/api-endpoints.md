@@ -111,6 +111,46 @@ const response = await fetch(`/sessions/${sessionId}/profile`, {
 }
 ```
 
+### 4. 레시피 이미지 생성
+**POST** `/recipe-image`
+
+레시피 정보를 기반으로 AI가 생성한 음식 이미지를 반환합니다.
+
+**Request:**
+```javascript
+const recipeData = {
+  recipe: {
+    name: "다이어트 도시락",
+    ingredients: [
+      "닭가슴살 200g",
+      "브로콜리 100g",
+      "현미밥 150g"
+    ]
+  }
+};
+
+const response = await fetch('/recipe-image', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify(recipeData)
+});
+```
+
+**Response:**
+```json
+{
+  "recipe": "다이어트 도시락",
+  "image": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA...",
+  "ingredients": [
+    "닭가슴살 200g",
+    "브로콜리 100g", 
+    "현미밥 150g"
+  ]
+}
+```
+
 ## 영양소 정보 엔드포인트
 
 ### 1. 영양소 정보 조회
