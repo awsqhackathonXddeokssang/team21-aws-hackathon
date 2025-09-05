@@ -293,7 +293,7 @@ export default function ChatScreen() {
     const submitMessage: ChatMessage = {
       id: `ai-submit-${Date.now()}`,
       type: 'ai',
-      content: '프로필이 완성되었습니다! 맞춤 레시피를 생성하고 최저가 정보를 찾고 있어요... 🍳',
+      content: '대화를 마쳤어요! 맞춤 레시피를 생성하고 최저가 정보를 찾을게요. 잠시만 기다려주세요!',
       timestamp: new Date()
     };
 
@@ -338,12 +338,14 @@ export default function ChatScreen() {
       // }, 3000);
 
       // Mock 처리 (실제로는 위의 폴링으로 대체)
+      // 로딩 화면으로 즉시 전환
+      setShowResult(true);
+      
       setTimeout(async () => {
         const recipe = await MockApiService.generateRecipe(selectedTarget!, '맞춤 레시피');
         setCurrentRecipe(recipe);
-        setShowResult(true);
         setIsLoading(false);
-      }, 3000);
+      }, 5000); // 5초 로딩 시뮬레이션
       
     } catch (error) {
       console.error('Error submitting profile:', error);
