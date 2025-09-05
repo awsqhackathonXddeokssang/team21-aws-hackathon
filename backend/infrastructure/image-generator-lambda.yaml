@@ -7,6 +7,11 @@ Parameters:
     Default: 'recipe-image-generator'
     Description: 'Name of the existing Lambda function to reference'
 
+Resources:
+  # Dummy resource to satisfy CloudFormation requirements
+  DummyWaitConditionHandle:
+    Type: AWS::CloudFormation::WaitConditionHandle
+
 Outputs:
   RecipeImageGeneratorLambdaArn:
     Description: 'Recipe Image Generator Lambda Function ARN (Referenced)'
