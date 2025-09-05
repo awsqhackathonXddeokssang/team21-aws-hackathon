@@ -7,6 +7,7 @@ import { Loader2, ChefHat } from 'lucide-react';
 import ResultModal from './ResultModal';
 import { ApiService } from '@/lib/api';
 import { createScrollHandler } from '@/lib/scrollUtils';
+import { API_CONFIG } from '@/config/api';
 
 export default function ChatScreen() {
   const [selectedTarget, setSelectedTarget] = useState<UserTarget | null>(null);
@@ -21,12 +22,106 @@ export default function ChatScreen() {
   const [conversationPhase, setConversationPhase] = useState<'basic' | 'additional' | 'complete'>('basic');
   const [activeTab, setActiveTab] = useState<'recipe' | 'shopping' | 'nutrition'>('recipe');
   const [checkedItems, setCheckedItems] = useState<{[key: string]: boolean}>({});
+  
+  // 폴링 관련 상태 추가
+  const [executionId, setExecutionId] = useState<string>('');
+  const [progress, setProgress] = useState(0);
+  const [progressMessage, setProgressMessage] = useState('');
+  const [pollCount, setPollCount] = useState(0);
 
   // 자동 스크롤을 위한 ref
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // 스마트 스크롤 핸들러 생성
   const scrollToBottom = createScrollHandler(messagesEndRef);
+
+  // 상태별 진행률 매핑
+  const getProgressInfo = (status: string, phase: string) => {
+    switch (phase) {
+      case 'recipe_generation':
+        return { progress: 40, message: '🤖 AI가 맞춤 레시피를 생성하고 있어요...' };
+      case 'price_fetching':
+        return { progress: 70, message: '💰 최저가 정보를 수집하고 있어요...' };
+      case 'combining':
+        return { progress: 90, message: '📋 결과를 정리하고 있어요...' };
+      case 'completed':
+        return { progress: 100, message: '✅ 완료되었습니다!' };
+      default:
+        return { progress: 10, message: '🚀 처리를 시작하고 있어요...' };
+    }
+  };
+
+  // 폴링 로직
+  const startPolling = async (executionId: string) => {
+    const maxPolls = 30;
+    let pollCount = 0;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        pollCount++;
+        setPollCount(pollCount);
+
+        const statusResponse = await fetch(`${API_CONFIG.BASE_URL}/sessions/${sessionId}/status`);
+        const { status, phase, result, error } = await statusResponse.json();
+
+        const progressInfo = getProgressInfo(status, phase);
+        setProgress(progressInfo.progress);
+        setProgressMessage(progressInfo.message);
+
+        if (status === 'completed') {
+          clearInterval(pollInterval);
+          
+          // 결과 조회
+          const resultResponse = await fetch(`${API_CONFIG.BASE_URL}/sessions/${sessionId}/result`);
+          const recipeResult = await resultResponse.json();
+          
+          // 결과 캐싱
+          localStorage.setItem(`recipe_${sessionId}`, JSON.stringify(recipeResult));
+          
+          setCurrentRecipe(recipeResult.recipe);
+          setIsLoading(false);
+          
+        } else if (status === 'failed') {
+          clearInterval(pollInterval);
+          handlePollingError(error || '처리 중 오류가 발생했습니다.');
+          
+        } else if (pollCount >= maxPolls) {
+          clearInterval(pollInterval);
+          handlePollingTimeout();
+        }
+
+      } catch (error) {
+        console.error('폴링 오류:', error);
+        if (pollCount >= maxPolls) {
+          clearInterval(pollInterval);
+          handlePollingTimeout();
+        }
+      }
+    }, 2000);
+  };
+
+  // 폴링 에러 처리
+  const handlePollingError = (errorMessage: string) => {
+    setIsLoading(false);
+    setProgressMessage(`❌ ${errorMessage}`);
+    // 재시도 옵션 제공
+    setTimeout(() => {
+      if (confirm('처리 중 오류가 발생했습니다. 다시 시도하시겠습니까?')) {
+        handleSubmitProfile();
+      }
+    }, 1000);
+  };
+
+  // 폴링 타임아웃 처리
+  const handlePollingTimeout = () => {
+    setIsLoading(false);
+    setProgressMessage('⏰ 처리 시간이 초과되었습니다.');
+    setTimeout(() => {
+      if (confirm('처리 시간이 초과되었습니다. 다시 시도하시겠습니까?')) {
+        handleSubmitProfile();
+      }
+    }, 1000);
+  };
 
   // 마지막 메시지 기반 선택지 표시 로직
   const lastMessage = messages[messages.length - 1];
@@ -320,233 +415,6 @@ export default function ChatScreen() {
     return price.toLocaleString('ko-KR') + '원';
   };
 
-  const generateRecipe = async () => {
-    try {
-      // 타겟별 하드코딩된 테스트 데이터
-      let hardcodedRecipe;
-      
-      switch (selectedTarget) {
-        case 'baby':
-          hardcodedRecipe = {
-            id: 'baby-chicken-pumpkin',
-            name: '닭가슴살 단호박 이유식',
-            description: '9-12개월 아기를 위한 영양만점 이유식입니다. 부드럽고 소화하기 쉬운 재료로 만든 건강한 한 끼입니다.',
-            cookingTime: 20,
-            difficulty: 'easy' as const,
-            servings: 2,
-            instructions: [
-              '닭가슴살은 깨끗이 씻어 한 입 크기로 썰어주세요',
-              '단호박은 껍질을 벗기고 작게 썰어주세요',
-              '브로콜리는 꽃송이만 떼어 작게 썰어주세요',
-              '물을 끓인 후 닭가슴살을 넣고 10분간 삶아주세요',
-              '단호박과 브로콜리를 넣고 5분 더 삶아주세요',
-              '모든 재료를 으깨서 아기가 먹기 좋은 크기로 만들어주세요'
-            ],
-            ingredients: [
-              {
-                name: '닭가슴살',
-                amount: '50g',
-                prices: [
-                  { vendor: '이마트', price: 3500 },
-                  { vendor: '쿠팡', price: 3200 },
-                  { vendor: '마켓컬리', price: 3800 }
-                ]
-              },
-              {
-                name: '단호박',
-                amount: '100g',
-                prices: [
-                  { vendor: '이마트', price: 2000 },
-                  { vendor: '쿠팡', price: 1800 },
-                  { vendor: '마켓컬리', price: 2200 }
-                ]
-              },
-              {
-                name: '브로콜리',
-                amount: '30g',
-                prices: [
-                  { vendor: '이마트', price: 1500 },
-                  { vendor: '쿠팡', price: 1300 },
-                  { vendor: '마켓컬리', price: 1700 }
-                ]
-              }
-            ],
-            nutrition: {
-              calories: 180,
-              carbs: 15,
-              protein: 18,
-              fat: 3,
-              carbsPercent: 33,
-              proteinPercent: 40,
-              fatPercent: 15
-            },
-            tags: ['이유식', '12개월', '영양균형'],
-            totalPrice: 6300
-          };
-          break;
-          
-        case 'diabetes':
-          hardcodedRecipe = {
-            id: 'diabetes-brown-rice-vegetables',
-            name: '현미 채소볶음',
-            description: '혈당 관리에 도움되는 저GI 현미와 신선한 채소로 만든 건강한 볶음밥입니다.',
-            cookingTime: 25,
-            difficulty: 'easy' as const,
-            servings: 2,
-            instructions: [
-              '현미는 미리 불려서 밥을 지어주세요',
-              '브로콜리와 당근은 한 입 크기로 썰어주세요',
-              '팬에 올리브오일을 두르고 당근을 먼저 볶아주세요',
-              '브로콜리를 넣고 2분간 더 볶아주세요',
-              '현미밥을 넣고 골고루 섞어가며 볶아주세요',
-              '소금과 후추로 간을 맞춰 완성해주세요'
-            ],
-            ingredients: [
-              {
-                name: '현미',
-                amount: '1컵',
-                prices: [
-                  { vendor: '이마트', price: 4500 },
-                  { vendor: '쿠팡', price: 4200 },
-                  { vendor: '마켓컬리', price: 4800 }
-                ]
-              },
-              {
-                name: '브로콜리',
-                amount: '100g',
-                prices: [
-                  { vendor: '이마트', price: 2500 },
-                  { vendor: '쿠팡', price: 2200 },
-                  { vendor: '마켓컬리', price: 2800 }
-                ]
-              },
-              {
-                name: '당근',
-                amount: '1개',
-                prices: [
-                  { vendor: '이마트', price: 1200 },
-                  { vendor: '쿠팡', price: 1000 },
-                  { vendor: '마켓컬리', price: 1400 }
-                ]
-              },
-              {
-                name: '올리브오일',
-                amount: '1큰술',
-                prices: [
-                  { vendor: '이마트', price: 6800 },
-                  { vendor: '쿠팡', price: 5900 },
-                  { vendor: '마켓컬리', price: 7200 }
-                ]
-              }
-            ],
-            nutrition: {
-              calories: 320,
-              carbs: 45,
-              protein: 12,
-              fat: 8,
-              carbsPercent: 56,
-              proteinPercent: 15,
-              fatPercent: 23
-            },
-            tags: ['당뇨식', '저GI', '고섬유', '혈당관리'],
-            totalPrice: 15000
-          };
-          break;
-          
-        default: // keto
-          hardcodedRecipe = {
-            id: 'keto-shrimp-avocado',
-            name: '케토 새우 아보카도 볶음',
-            description: '저탄수화물 고지방 케톤 다이어트에 완벽한 새우 아보카도 요리입니다. 신선한 새우와 크리미한 아보카도의 조화가 일품입니다.',
-            cookingTime: 15,
-            difficulty: 'easy' as const,
-            servings: 2,
-            instructions: [
-              '새우는 껍질을 벗기고 내장을 제거한 후 깨끗이 씻어주세요',
-              '아보카도는 반으로 갈라 씨를 제거하고 한 입 크기로 썰어주세요',
-              '팬에 버터를 두르고 중불에서 녹여주세요',
-              '새우를 넣고 2-3분간 볶아 색이 변하면 뒤집어주세요',
-              '아보카도를 넣고 1분간 가볍게 볶아주세요',
-              '올리브오일을 뿌리고 소금, 후추로 간을 맞춰 완성해주세요'
-            ],
-            ingredients: [
-              {
-                name: '새우',
-                amount: '200g',
-                prices: [
-                  { vendor: '이마트', price: 8900 },
-                  { vendor: '쿠팡', price: 7500 },
-                  { vendor: '마켓컬리', price: 8200 }
-                ]
-              },
-              {
-                name: '아보카도',
-                amount: '1개',
-                prices: [
-                  { vendor: '이마트', price: 2500 },
-                  { vendor: '쿠팡', price: 2200 },
-                  { vendor: '마켓컬리', price: 2800 }
-                ]
-              },
-              {
-                name: '버터',
-                amount: '20g',
-                prices: [
-                  { vendor: '이마트', price: 4500 },
-                  { vendor: '쿠팡', price: 3900 },
-                  { vendor: '마켓컬리', price: 4200 }
-                ]
-              },
-              {
-                name: '올리브오일',
-                amount: '1큰술',
-                prices: [
-                  { vendor: '이마트', price: 6800 },
-                  { vendor: '쿠팡', price: 5900 },
-                  { vendor: '마켓컬리', price: 7200 }
-                ]
-              },
-              {
-                name: '소금',
-                amount: '약간',
-                prices: [
-                  { vendor: '이마트', price: 1200 },
-                  { vendor: '쿠팡', price: 1000 },
-                  { vendor: '마켓컬리', price: 1500 }
-                ]
-              }
-            ],
-            nutrition: {
-              calories: 420,
-              carbs: 8,
-              protein: 25,
-              fat: 35,
-              carbsPercent: 7,
-              proteinPercent: 23,
-              fatPercent: 70
-            },
-            tags: ['케토', '고지방', '저탄수화물', '오메가3'],
-            totalPrice: 23400
-          };
-      }
-
-      setCurrentRecipe(hardcodedRecipe);
-      
-      // 모든 재료를 기본적으로 체크된 상태로 설정
-      const initialCheckedItems: {[key: string]: boolean} = {};
-      hardcodedRecipe.ingredients.forEach(ingredient => {
-        initialCheckedItems[ingredient.name] = true;
-      });
-      setCheckedItems(initialCheckedItems);
-      
-      setShowResult(true);
-      setIsLoading(false);
-    } catch (error) {
-      console.error('Error:', error);
-      setIsLoading(false);
-    }
-  };
-
   const handleTextInput = async (inputText: string) => {
     // 사용자 입력 메시지 추가
     const userMessage: ChatMessage = {
@@ -675,8 +543,17 @@ export default function ChatScreen() {
       const response = await ApiService.processRecipe(currentSessionId);
       console.log('✅ Recipe processing started:', response);
       
-      // 로딩 화면으로 즉시 전환 (폴링은 ResultModal에서 처리)
+      // executionId 저장 및 폴링 시작
+      const { executionId } = response;
+      setExecutionId(executionId);
+      setProgress(10);
+      setProgressMessage('🚀 처리를 시작하고 있어요...');
+      
+      // 로딩 화면으로 즉시 전환
       setShowResult(true);
+      
+      // 폴링 시작
+      startPolling(executionId);
       
     } catch (error) {
       console.error('❌ Recipe processing failed:', error);
@@ -708,14 +585,35 @@ export default function ChatScreen() {
       {/* 로딩 화면 */}
       {showResult && isLoading && (
         <div className="flex-1 flex items-center justify-center bg-gradient-to-br from-orange-50 to-orange-100">
-          <div className="text-center">
+          <div className="text-center max-w-md mx-auto p-8">
             <div className="mb-6">
               <div className="w-16 h-16 mx-auto mb-4 relative">
                 <div className="absolute inset-0 border-4 border-orange-200 rounded-full"></div>
                 <div className="absolute inset-0 border-4 border-orange-500 rounded-full border-t-transparent animate-spin"></div>
               </div>
-              <h2 className="text-xl font-semibold text-gray-800 mb-2">맞춤 레시피 생성 중...</h2>
+              
+              {/* 진행률 바 */}
+              <div className="w-full bg-gray-200 rounded-full h-3 mb-4">
+                <div 
+                  className="bg-gradient-to-r from-orange-400 to-orange-600 h-3 rounded-full transition-all duration-500 ease-out"
+                  style={{ width: `${progress}%` }}
+                ></div>
+              </div>
+              
+              {/* 진행률 텍스트 */}
+              <div className="text-sm text-gray-600 mb-2">{progress}% 완료</div>
+              
+              <h2 className="text-xl font-semibold text-gray-800 mb-2">
+                {progressMessage || '맞춤 레시피 생성 중...'}
+              </h2>
               <p className="text-gray-600">AI가 최적의 레시피와 최저가 정보를 찾고 있어요</p>
+              
+              {/* 폴링 카운트 표시 (개발용) */}
+              {pollCount > 0 && (
+                <div className="text-xs text-gray-400 mt-2">
+                  상태 확인: {pollCount}/30
+                </div>
+              )}
             </div>
             <div className="flex justify-center space-x-1">
               <div className="w-2 h-2 bg-orange-500 rounded-full animate-bounce"></div>
