@@ -57,7 +57,7 @@ Resources:
                       "Type": "Task",
                       "Resource": "arn:aws:states:::lambda:invoke",
                       "Parameters": {
-                        "FunctionName": "PriceLambda",
+                        "FunctionName": "ai-chef-price",
                         "Payload": {
                           "sessionId.$": "$.sessionId",
                           "profile.$": "$.profile",
@@ -99,7 +99,7 @@ Resources:
               "Type": "Task",
               "Resource": "arn:aws:states:::lambda:invoke",
               "Parameters": {
-                "FunctionName": "CombineLambda",
+                "FunctionName": "ai-chef-combine",
                 "Payload": {
                   "sessionId.$": "$.sessionId",
                   "profile.$": "$.profile",
