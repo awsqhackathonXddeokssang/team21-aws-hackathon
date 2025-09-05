@@ -1,28 +1,15 @@
 import { Recipe, ChatMessage, UserTarget, ApiResponse, SessionResponse, AdditionalQuestionResponse } from '@/types';
 import { sampleRecipes, conversationScenarios } from './mockData';
+import { ApiService } from './api';
 
 // API 응답 시뮬레이션을 위한 지연 함수
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Mock API 클래스
 export class MockApiService {
-  // 세션 시작 API 시뮬레이션
+  // 세션 시작 - 실제 API 호출
   static async startSession(): Promise<SessionResponse> {
-    // 1초 로딩 시뮬레이션
-    await delay(1000);
-    
-    const timestamp = Date.now();
-    const random = Math.random().toString(36).substring(2, 8);
-    const sessionId = `sess-${timestamp}-${random}`;
-    
-    const sessionData: SessionResponse = {
-      sessionId,
-      createdAt: new Date().toISOString(),
-      expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString() // 2시간 후
-    };
-    
-    console.log('Mock Session Created:', sessionData);
-    return sessionData;
+    return await ApiService.startSession();
   }
 
   // 추가 질문 처리 API 시뮬레이션 (Mock Bedrock)

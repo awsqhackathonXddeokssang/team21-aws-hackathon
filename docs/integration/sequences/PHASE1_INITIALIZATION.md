@@ -18,12 +18,12 @@ sequenceDiagram
 
     User->>Frontend: 앱 접속
     Frontend->>MockApiService: startSession() 호출 (항상 새 세션)
-    MockApiService->>API Gateway: POST /session/start
+    MockApiService->>API Gateway: POST /sessions
     API Gateway->>Lambda: 세션 생성 요청
     Lambda->>Lambda: sessionId 생성 (서버에서만)
     Lambda->>DynamoDB: sessionId 및 메타데이터 저장 (TTL 2시간)
     
-    Note over Lambda: 세션 ID 형식: sess-{timestamp}-{random}
+    Note over Lambda: 세션 ID 형식: sess_{uuid}
     Note over Lambda: STATUS: 'idle'로 시작
     
     DynamoDB-->>Lambda: 저장 완료
@@ -49,7 +49,7 @@ return sessionData.sessionId;
 
 ### 3. 새 세션 생성 요청
 - **Frontend**: `MockApiService.startSession()` 호출
-- **Mock API**: `POST /session/start` 시뮬레이션
+- **Mock API**: `POST /sessions` 시뮬레이션
 - **Request Body**: 빈 객체 `{}`
 - **Headers**: `Content-Type: application/json`
 
@@ -58,9 +58,7 @@ return sessionData.sessionId;
 // MockApiService.startSession() 구현
 export const startSession = async (): Promise<SessionResponse> => {
   // 실제 구현에서는 서버가 생성
-  const timestamp = Date.now();
-  const random = Math.random().toString(36).substring(2, 8);
-  const sessionId = `sess-${timestamp}-${random}`;
+  const sessionId = `sess_${crypto.randomUUID()}`;
   
   const sessionData = {
     sessionId,
@@ -82,7 +80,7 @@ export const startSession = async (): Promise<SessionResponse> => {
 ### 6. 응답 데이터
 ```json
 {
-    "sessionId": "sess-1725512345678-abc123",
+    "sessionId": "sess_abc123def456",
     "createdAt": "2024-09-05T11:30:00.000Z",
     "expiresAt": "2024-09-05T13:30:00.000Z"
 }

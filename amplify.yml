@@ -5,20 +5,20 @@ applications:
         preBuild:
           commands:
             - cd web
-            - echo "Starting build at $(date)"
-            - echo "Node version: $(node --version)"
-            - echo "NPM version: $(npm --version)"
+            - 'echo "Starting build at $(date)"'
+            - 'echo "Node version: $(node --version)"'
+            - 'echo "NPM version: $(npm --version)"'
             - npm ci
         build:
           commands:
-            - echo "Running npm run build..."
+            - 'echo "Running npm run build..."'
             - npm run build
-            - echo "Build completed, checking output directory..."
-            - ls -la out/ || echo "out directory not found"
-            - echo "Contents of out directory:"
-            - find out -type f -name "*.html" | head -10 || echo "No HTML files found"
+            - 'echo "Build completed, checking output directory..."'
+            - 'ls -la out/ || echo "out directory not found"'
+            - 'echo "Contents of out directory:"'
+            - 'find out -type f -name "*.html" | head -10 || echo "No HTML files found"'
       artifacts:
-        baseDirectory: web/.next
+        baseDirectory: web/out
         files:
           - '**/*'
       cache:
