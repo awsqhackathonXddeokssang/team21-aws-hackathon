@@ -47,8 +47,8 @@ Resources:
       MemorySize: 256
       Environment:
         Variables:
-          SESSIONS_TABLE_NAME: !Sub 'ai-chef-sessions-${Environment}'
-          STEP_FUNCTIONS_ARN: !Sub 'arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:ai-chef-workflow-${Environment}'
+          SESSIONS_TABLE_NAME: 'ai-chef-sessions'
+          STEP_FUNCTIONS_ARN: !Sub 'arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:ai-chef-workflow'
       Code:
         ZipFile: |
           import json
@@ -131,7 +131,7 @@ Resources:
   ApiGateway:
     Type: AWS::ApiGateway::RestApi
     Properties:
-      Name: !Sub 'ai-chef-api-${Environment}'
+      Name: 'ai-chef-api'
       Description: 'AI Chef Session Processing API'
       EndpointConfiguration:
         Types:
