@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { UserTarget, ChatMessage, Recipe } from '@/types';
 import { targetInfos } from '@/lib/mockData';
 import { Loader2, ChefHat } from 'lucide-react';
@@ -20,6 +20,14 @@ export default function ChatScreen() {
   const [conversationPhase, setConversationPhase] = useState<'basic' | 'additional' | 'complete'>('basic');
   const [activeTab, setActiveTab] = useState<'recipe' | 'shopping' | 'nutrition'>('recipe');
   const [checkedItems, setCheckedItems] = useState<{[key: string]: boolean}>({});
+
+  // 자동 스크롤을 위한 ref
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // 자동 스크롤 함수
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
 
   // 마지막 메시지 기반 선택지 표시 로직
   const lastMessage = messages[messages.length - 1];
@@ -57,6 +65,11 @@ export default function ChatScreen() {
     
     initializeSession();
   }, []);
+
+  // 메시지 변경 시 자동 스크롤
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, isLoading]);
 
   // 초기 AI 메시지들
   useEffect(() => {
@@ -235,7 +248,7 @@ export default function ChatScreen() {
             id: 'baby-chicken-pumpkin',
             name: '닭가슴살 단호박 이유식',
             description: '9-12개월 아기를 위한 영양만점 이유식입니다. 부드럽고 소화하기 쉬운 재료로 만든 건강한 한 끼입니다.',
-            cookingTime: '20분',
+            cookingTime: 20,
             calories: 180,
             steps: [
               '닭가슴살은 깨끗이 씻어 한 입 크기로 썰어주세요',
@@ -291,7 +304,7 @@ export default function ChatScreen() {
             id: 'diabetes-brown-rice-vegetables',
             name: '현미 채소볶음',
             description: '혈당 관리에 도움되는 저GI 현미와 신선한 채소로 만든 건강한 볶음밥입니다.',
-            cookingTime: '25분',
+            cookingTime: 25,
             calories: 320,
             steps: [
               '현미는 미리 불려서 밥을 지어주세요',
@@ -356,7 +369,7 @@ export default function ChatScreen() {
             id: 'keto-shrimp-avocado',
             name: '케토 새우 아보카도 볶음',
             description: '저탄수화물 고지방 케톤 다이어트에 완벽한 새우 아보카도 요리입니다. 신선한 새우와 크리미한 아보카도의 조화가 일품입니다.',
-            cookingTime: '15분',
+            cookingTime: 15,
             calories: 420,
             steps: [
               '새우는 껍질을 벗기고 내장을 제거한 후 깨끗이 씻어주세요',
@@ -461,7 +474,7 @@ export default function ChatScreen() {
       const profileData = {
         target: selectedTarget,
         servings: messages.find(m => m.content?.includes('인분'))?.content || '2인분',
-        cookingTime: messages.find(m => m.content?.includes('분'))?.content || '30분',
+        cookingTime: 30,
         additionalQuestions
       };
 
@@ -535,7 +548,7 @@ export default function ChatScreen() {
     const profileData = {
       target: selectedTarget,
       servings: messages.find(m => m.content?.includes('인분'))?.content || '2인분',
-      cookingTime: messages.find(m => m.content?.includes('분'))?.content || '30분',
+      cookingTime: 30,
       additionalQuestions,
       conversationHistory: messages.map(m => ({
         role: m.type,
@@ -582,7 +595,7 @@ export default function ChatScreen() {
               id: 'baby-chicken-pumpkin',
               name: '닭가슴살 단호박 이유식',
               description: '9-12개월 아기를 위한 영양만점 이유식입니다. 부드럽고 소화하기 쉬운 재료로 만든 건강한 한 끼입니다.',
-              cookingTime: '20분',
+              cookingTime: 20,
               calories: 180,
               steps: [
                 '닭가슴살은 깨끗이 씻어 한 입 크기로 썰어주세요',
@@ -638,7 +651,7 @@ export default function ChatScreen() {
               id: 'diabetes-brown-rice-vegetables',
               name: '현미 채소볶음',
               description: '혈당 관리에 도움되는 저GI 현미와 신선한 채소로 만든 건강한 볶음밥입니다.',
-              cookingTime: '25분',
+              cookingTime: 25,
               calories: 320,
               steps: [
                 '현미는 미리 불려서 밥을 지어주세요',
@@ -703,7 +716,7 @@ export default function ChatScreen() {
               id: 'keto-shrimp-avocado',
               name: '케토 새우 아보카도 볶음',
               description: '저탄수화물 고지방 케톤 다이어트에 완벽한 새우 아보카도 요리입니다. 신선한 새우와 크리미한 아보카도의 조화가 일품입니다.',
-              cookingTime: '15분',
+              cookingTime: 15,
               calories: 420,
               steps: [
                 '새우는 껍질을 벗기고 내장을 제거한 후 깨끗이 씻어주세요',
@@ -1277,6 +1290,9 @@ export default function ChatScreen() {
             </div>
           </div>
         )}
+
+        {/* 자동 스크롤을 위한 요소 */}
+        <div ref={messagesEndRef} />
 
         {/* 텍스트 입력 UI */}
         {shouldShowTextInput && !isLoading && (
