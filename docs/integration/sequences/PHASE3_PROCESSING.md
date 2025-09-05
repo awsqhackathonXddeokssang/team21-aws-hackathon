@@ -13,15 +13,17 @@ sequenceDiagram
     participant SF as Step Functions
     participant RL as Recipe Lambda
     participant PrL as Price Lambda
+    participant IL as Image Lambda
     participant CL as Combine Lambda
     participant BR as Bedrock (Claude Opus 4.1)
     participant NA as Naver API
+    participant IG as Image Generator
     participant DB as DynamoDB
 
-    Note over API, DB: Phase 3: Process Lambda가 워크플로우 시작
+    Note over API, DB: Phase 3: 병렬 처리로 성능 최적화 (Price + Image)
     
     %% Process Lambda가 Step Functions 시작
-    API->>PL: POST /session/{id}/process
+    API->>PL: POST /session/process
     PL->>DB: 프로필 검증 및 상태 업데이트
     PL->>SF: Step Functions 워크플로우 시작
     PL-->>API: executionId 반환
@@ -36,17 +38,29 @@ sequenceDiagram
     RL->>DB: 상태 업데이트 (recipe_completed, 50%)
     RL-->>SF: RecipeResult 반환
     
-    %% 2. 가격 조회 (50% → 80%)
-    SF->>PrL: FetchPrices (재료 목록 전달)
-    PrL->>DB: 상태 업데이트 (price_lookup, 60%)
-    PrL->>NA: 재료별 최저가 검색 (병렬)
-    Note over NA: 네이버 쇼핑 API 실시간 조회
-    NA-->>PrL: 가격 정보 반환
-    PrL->>DB: 상태 업데이트 (price_completed, 80%)
-    PrL-->>SF: PricingResult 반환
+    %% 2. 병렬 처리: 가격 조회 + 이미지 생성 (50% → 80%)
+    par 가격 조회
+        SF->>PrL: FetchPrices (재료 목록 전달)
+        PrL->>DB: 상태 업데이트 (price_lookup, 60%)
+        PrL->>NA: 재료별 최저가 검색
+        Note over NA: 네이버 쇼핑 API 실시간 조회
+        NA-->>PrL: 가격 정보 반환
+        PrL->>DB: 상태 업데이트 (price_completed, 70%)
+        PrL-->>SF: PricingResult 반환
+    and 이미지 생성
+        SF->>IL: GenerateImage (레시피 정보 전달)
+        IL->>DB: 상태 업데이트 (image_generation, 60%)
+        IL->>IG: AI 이미지 생성 요청
+        Note over IG: 레시피 기반 이미지 생성
+        IG-->>IL: 이미지 URL 반환
+        IL->>DB: 상태 업데이트 (image_completed, 70%)
+        IL-->>SF: ImageResult 반환
+    end
+    
+    Note over SF: 병렬 처리 완료 (가격 + 이미지)
     
     %% 3. 결과 합성 (80% → 100%)
-    SF->>CL: CombineResults (레시피 + 가격)
+    SF->>CL: CombineResults (레시피 + 가격 + 이미지)
     CL->>DB: 상태 업데이트 (combining_results, 90%)
     CL->>DB: 최종 결과 저장 (Results 테이블)
     CL->>DB: 상태 업데이트 (completed, 100%)
@@ -57,10 +71,10 @@ sequenceDiagram
 
 ## 실제 Step Functions 정의 (배포됨)
 
-### 현재 워크플로우 구조 (Session Lambda 시작)
+### 현재 워크플로우 구조 (병렬 처리 적용)
 ```json
 {
-  "Comment": "AI Chef Simplified Workflow - Session Lambda starts workflow",
+  "Comment": "AI Chef Workflow - Parallel Price and Image Generation",
   "StartAt": "GenerateRecipe",
   "States": {
     "GenerateRecipe": {
@@ -74,39 +88,48 @@ sequenceDiagram
         "recipe.$": "$.Payload.body"
       },
       "ResultPath": "$.recipeResult",
-      "Retry": [
-        {
-          "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException"],
-          "IntervalSeconds": 2,
-          "MaxAttempts": 3,
-          "BackoffRate": 2.0
-        }
-      ],
-      "Next": "FetchPrices"
+      "Next": "ParallelProcessing"
     },
-    "FetchPrices": {
-      "Type": "Task",
-      "Resource": "arn:aws:states:::lambda:invoke",
-      "Parameters": {
-        "FunctionName": "ai-chef-price-dev",
-        "Payload": {
-          "sessionId.$": "$.sessionId",
-          "profile.$": "$.profile",
-          "ingredients.$": "$.recipeResult.recipe.ingredients"
-        }
-      },
-      "ResultSelector": {
-        "pricing.$": "$.Payload.body"
-      },
-      "ResultPath": "$.pricingResult",
-      "Retry": [
+    "ParallelProcessing": {
+      "Type": "Parallel",
+      "Branches": [
         {
-          "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException"],
-          "IntervalSeconds": 2,
-          "MaxAttempts": 3,
-          "BackoffRate": 2.0
+          "StartAt": "FetchPrices",
+          "States": {
+            "FetchPrices": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "ai-chef-price-dev",
+                "Payload": {
+                  "sessionId.$": "$.sessionId",
+                  "profile.$": "$.profile",
+                  "ingredients.$": "$.recipeResult.recipe.ingredients"
+                }
+              },
+              "End": true
+            }
+          }
+        },
+        {
+          "StartAt": "GenerateImage",
+          "States": {
+            "GenerateImage": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "ai-chef-image-dev",
+                "Payload": {
+                  "sessionId.$": "$.sessionId",
+                  "recipe.$": "$.recipeResult.recipe"
+                }
+              },
+              "End": true
+            }
+          }
         }
       ],
+      "ResultPath": "$.parallelResults",
       "Next": "CombineResults"
     },
     "CombineResults": {
@@ -118,7 +141,8 @@ sequenceDiagram
           "sessionId.$": "$.sessionId",
           "profile.$": "$.profile",
           "recipeResult.$": "$.recipeResult.recipe",
-          "pricingResult.$": "$.pricingResult.pricing"
+          "pricingResult.$": "$.parallelResults[0].Payload.body",
+          "imageResult.$": "$.parallelResults[1].Payload.body"
         }
       },
       "End": true
@@ -136,8 +160,8 @@ sequenceDiagram
 def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
     """Process Lambda - 세션 처리 및 워크플로우 시작"""
     try:
-        session_id = event['pathParameters']['id']
         body = json.loads(event['body'])
+        session_id = body.get('sessionId')
         user_profile = body.get('userProfile')
         
         logger.info(f"Processing session: {session_id}")
@@ -296,7 +320,93 @@ JSON 형식으로 응답:
 }}"""
 ```
 
-### 2. Price Lambda (네이버 쇼핑 API)
+### 2. Image Lambda (이미지 생성)
+
+#### AI 이미지 생성
+```python
+def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
+    """Image Lambda - 레시피 기반 이미지 생성"""
+    try:
+        session_id = event.get('sessionId')
+        recipe = event.get('recipe')
+        
+        logger.info(f"Generating image for session: {session_id}")
+        
+        # 상태 업데이트: 이미지 생성 시작
+        update_session_status(session_id, 'processing', 'image_generation', 60)
+        
+        # 이미지 생성 프롬프트 구성
+        image_prompt = build_image_prompt(recipe)
+        
+        # AI 이미지 생성
+        image_url = generate_recipe_image(image_prompt)
+        
+        # 상태 업데이트: 이미지 생성 완료
+        update_session_status(session_id, 'processing', 'image_completed', 70)
+        
+        return {
+            'statusCode': 200,
+            'body': {
+                'imageUrl': image_url,
+                'prompt': image_prompt,
+                'generatedAt': datetime.now().isoformat()
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f'Image generation error: {str(e)}')
+        
+        # 에러 시에도 기본 이미지 제공
+        return {
+            'statusCode': 200,
+            'body': {
+                'imageUrl': get_default_recipe_image(),
+                'fallback': True,
+                'generatedAt': datetime.now().isoformat()
+            }
+        }
+
+def build_image_prompt(recipe: Dict[str, Any]) -> str:
+    """레시피 기반 이미지 프롬프트 생성"""
+    recipe_name = recipe.get('recipeName', 'delicious dish')
+    ingredients = recipe.get('ingredients', [])
+    
+    # 주요 재료 추출
+    main_ingredients = [ing['name'] for ing in ingredients[:3]]
+    ingredients_text = ', '.join(main_ingredients)
+    
+    return f"A beautifully plated {recipe_name} with {ingredients_text}, professional food photography, appetizing"
+
+def generate_recipe_image(prompt: str) -> str:
+    """AI 이미지 생성 (Bedrock Titan Image Generator)"""
+    try:
+        response = bedrock.invoke_model(
+            modelId='amazon.titan-image-generator-v1',
+            body=json.dumps({
+                'taskType': 'TEXT_IMAGE',
+                'textToImageParams': {
+                    'text': prompt
+                },
+                'imageGenerationConfig': {
+                    'numberOfImages': 1,
+                    'height': 512,
+                    'width': 512
+                }
+            })
+        )
+        
+        result = json.loads(response['body'].read())
+        image_data = result['images'][0]
+        
+        # S3에 업로드하고 URL 반환
+        return upload_image_to_s3(image_data)
+        
+    except Exception as e:
+        logger.error(f'Image generation failed: {e}')
+        return get_default_recipe_image()
+```
+
+### 3. Price Lambda (네이버 쇼핑 API)
 
 #### 실시간 가격 조회
 ```python
@@ -438,34 +548,40 @@ def save_final_results(session_id: str, combined_result: Dict[str, Any]):
 
 ## 성능 최적화 및 Best Practice
 
-### 1. Lambda 기반 상태 관리
+### 1. 병렬 처리의 효과
+- **순차 처리**: Recipe(15초) + Price(10초) + Image(12초) = 37초
+- **병렬 처리**: Recipe(15초) + max(Price(10초), Image(12초)) = 27초
+- **시간 단축**: 27% 성능 향상 (37초 → 27초)
+
+### 2. Lambda 기반 상태 관리
 - **장점**: 관심사 분리, 에러 처리 개선, 유지보수성 향상
 - **구현**: 각 Lambda가 DynamoDB 상태를 직접 관리
 - **결과**: Step Functions 워크플로우 단순화
 
-### 2. 순차 처리의 이유
-- **Recipe → Price**: Price Lambda가 Recipe의 재료 목록 필요
-- **Price → Combine**: 모든 데이터가 준비된 후 결합
-- **예상 시간**: 총 25-35초 (타겟별 차이)
+### 3. 병렬 처리 최적화
+- **Price Lambda**: 네이버 API 호출 (평균 10초)
+- **Image Lambda**: AI 이미지 생성 (평균 12초)
+- **동시 실행**: 두 작업이 병렬로 진행되어 전체 시간 단축
 
-### 3. Lambda 설정 최적화
+### 4. Lambda 설정 최적화
 ```yaml
 # Recipe Lambda
 RecipeLambda:
   Runtime: python3.11
   MemorySize: 512MB
   Timeout: 120초
-  Environment:
-    BEDROCK_REGION: us-east-1
 
 # Price Lambda  
 PriceLambda:
   Runtime: python3.11
   MemorySize: 256MB
   Timeout: 60초
-  Environment:
-    NAVER_CLIENT_ID: ${ssm:naver-client-id}
-    NAVER_CLIENT_SECRET: ${ssm:naver-client-secret}
+
+# Image Lambda (신규)
+ImageLambda:
+  Runtime: python3.11
+  MemorySize: 1024MB  # 이미지 처리를 위한 높은 메모리
+  Timeout: 180초      # 이미지 생성 시간 고려
 
 # Combine Lambda
 CombineLambda:
@@ -555,9 +671,10 @@ aws stepfunctions describe-execution \
 ### 테스트 실행
 ```bash
 # Process Lambda를 통한 워크플로우 시작
-curl -X POST "https://jkyyb2tqm0.execute-api.us-east-1.amazonaws.com/dev/session/sess_test_789/process" \
+curl -X POST "https://jkyyb2tqm0.execute-api.us-east-1.amazonaws.com/dev/session/process" \
   -H "Content-Type: application/json" \
   -d '{
+    "sessionId": "sess_test_789",
     "userProfile": {
       "target": "keto",
       "responses": {

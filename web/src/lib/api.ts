@@ -83,6 +83,11 @@ export class ApiService {
       console.log('📡 API 응답 상태:', response.status, response.statusText);
 
       if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        if (errorData.error === 'NON_FOOD_RELATED_PROMPT') {
+          console.log('ℹ️ 음식 관련 내용이 아닙니다:', errorData.message);
+          return { isNonFoodPrompt: true, message: errorData.message };
+        }
         throw new ApiError(response.status, `HTTP ${response.status}: ${response.statusText}`);
       }
 
@@ -99,7 +104,7 @@ export class ApiService {
   static async processRecipe(sessionId: string): Promise<any> {
     try {
       console.log('🍳 API 호출 시작 - processRecipe');
-      const url = `${API_CONFIG.BASE_URL}/process`;
+      const url = `${API_CONFIG.BASE_URL}/sessions/process`;
       console.log('📍 API URL:', url);
       
       const response = await this.fetchWithTimeout(url, {

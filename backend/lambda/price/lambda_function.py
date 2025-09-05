@@ -55,10 +55,40 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
             }
         }
 
+def get_naver_credentials():
+    """AWS Secrets Manager에서 네이버 API 키 가져오기"""
+    import boto3
+    import json
+    
+    secret_name = os.environ.get('NAVER_API_SECRET_NAME')
+    if not secret_name:
+        # Fallback to environment variables
+        return {
+            'client_id': os.environ.get('NAVER_CLIENT_ID', '5A_tDnltTaEiCEsXbHH7'),
+            'client_secret': os.environ.get('NAVER_CLIENT_SECRET', 'ygjYjr9oqc')
+        }
+    
+    try:
+        secrets_client = boto3.client('secretsmanager', region_name='us-east-1')
+        response = secrets_client.get_secret_value(SecretId=secret_name)
+        secret_data = json.loads(response['SecretString'])
+        return {
+            'client_id': secret_data['client_id'],
+            'client_secret': secret_data['client_secret']
+        }
+    except Exception as e:
+        print(f"Failed to get secrets: {e}")
+        # Fallback to environment variables
+        return {
+            'client_id': os.environ.get('NAVER_CLIENT_ID', '5A_tDnltTaEiCEsXbHH7'),
+            'client_secret': os.environ.get('NAVER_CLIENT_SECRET', 'ygjYjr9oqc')
+        }
+
 def get_ingredient_prices(ingredient_name: str) -> List[Dict]:
-    """네이버 쇼핑 API로 가격 조회 - 0원만 필터링"""
-    client_id = os.environ.get('NAVER_CLIENT_ID', '5A_tDnltTaEiCEsXbHH7')
-    client_secret = os.environ.get('NAVER_CLIENT_SECRET', 'ygjYjr9oqc')
+    """네이버 쇼핑 API로 가격 조회 - Secrets Manager 사용"""
+    credentials = get_naver_credentials()
+    client_id = credentials['client_id']
+    client_secret = credentials['client_secret']
     
     # 한글 인코딩 수정
     query = urllib.parse.quote(ingredient_name)

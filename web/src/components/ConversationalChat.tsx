@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ChatMessage } from '@/types';
 import { Bot, User, Loader2 } from 'lucide-react';
 import clsx from 'clsx';
+import { createScrollHandler } from '@/lib/scrollUtils';
 
 interface ConversationalChatProps {
   messages: ChatMessage[];
@@ -15,9 +16,12 @@ export default function ConversationalChat({ messages, isLoading }: Conversation
   const [typingMessage, setTypingMessage] = useState<string>('');
   const [showTyping, setShowTyping] = useState(false);
 
+  // 스마트 스크롤 핸들러 생성
+  const scrollToBottom = createScrollHandler(messagesEndRef);
+
   // 자동 스크롤
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    scrollToBottom();
   }, [messages, showTyping]);
 
   // 타이핑 효과
@@ -112,7 +116,7 @@ export default function ConversationalChat({ messages, isLoading }: Conversation
   };
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 space-y-4">
+    <div className="flex-1 overflow-y-auto p-4 space-y-4" data-scroll-container>
       <div className="max-w-2xl mx-auto">
         {/* 환영 메시지 */}
         {messages.length === 1 && (
