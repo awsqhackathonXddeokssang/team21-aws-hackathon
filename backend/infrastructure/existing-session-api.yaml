@@ -1,0 +1,239 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'AI Chef Session API - Based on existing configuration'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+
+Resources:
+  # DynamoDB Table
+  SessionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "ai-chef-sessions-${Environment}"
+      AttributeDefinitions:
+        - AttributeName: sessionId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: sessionId
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+
+  # Lambda Execution Role
+  SessionLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "ai-chef-session-role-${Environment}"
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                Resource: !GetAtt SessionsTable.Arn
+
+  # Lambda Function - Session Create
+  SessionCreateFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "ai-chef-session-create-${Environment}"
+      Runtime: nodejs18.x
+      Handler: index.handler
+      Role: !GetAtt SessionLambdaRole.Arn
+      Timeout: 30
+      Environment:
+        Variables:
+          SESSIONS_TABLE_NAME: !Ref SessionsTable
+      Code:
+        ZipFile: |
+          const AWS = require('aws-sdk');
+          const { v4: uuidv4 } = require('uuid');
+          const dynamodb = new AWS.DynamoDB.DocumentClient();
+          
+          exports.handler = async (event) => {
+              const sessionId = 'sess_' + uuidv4();
+              const now = new Date();
+              const expiresAt = new Date(now.getTime() + 2 * 60 * 60 * 1000); // 2 hours
+              const ttl = Math.floor(expiresAt.getTime() / 1000);
+              
+              try {
+                  await dynamodb.put({
+                      TableName: process.env.SESSIONS_TABLE_NAME,
+                      Item: {
+                          sessionId,
+                          createdAt: now.toISOString(),
+                          expiresAt: expiresAt.toISOString(),
+                          ttl,
+                          status: 'created'
+                      }
+                  }).promise();
+                  
+                  return {
+                      statusCode: 200,
+                      headers: {
+                          'Access-Control-Allow-Origin': '*',
+                          'Access-Control-Allow-Methods': 'GET,POST,PUT,OPTIONS',
+                          'Access-Control-Allow-Headers': 'Content-Type,Authorization'
+                      },
+                      body: JSON.stringify({ 
+                          sessionId,
+                          createdAt: now.toISOString(),
+                          expiresAt: expiresAt.toISOString()
+                      })
+                  };
+              } catch (error) {
+                  return {
+                      statusCode: 500,
+                      headers: {
+                          'Access-Control-Allow-Origin': '*'
+                      },
+                      body: JSON.stringify({ error: error.message })
+                  };
+              }
+          };
+
+  # API Gateway
+  SessionApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub "ai-chef-session-api-${Environment}"
+      Description: 'AI Chef Session Management API'
+      EndpointConfiguration:
+        Types:
+          - EDGE
+
+  # API Gateway Resources
+  SessionsResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref SessionApi
+      ParentId: !GetAtt SessionApi.RootResourceId
+      PathPart: 'sessions'
+
+  SessionIdResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref SessionApi
+      ParentId: !Ref SessionsResource
+      PathPart: '{sessionId}'
+
+  ProfileResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref SessionApi
+      ParentId: !Ref SessionIdResource
+      PathPart: 'profile'
+
+  RecipeImageResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref SessionApi
+      ParentId: !GetAtt SessionApi.RootResourceId
+      PathPart: 'recipe-image'
+
+  # Methods
+  SessionsPostMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref SessionApi
+      ResourceId: !Ref SessionsResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SessionCreateFunction.Arn}/invocations'
+
+  SessionGetMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref SessionApi
+      ResourceId: !Ref SessionIdResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SessionCreateFunction.Arn}/invocations'
+
+  ProfilePutMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref SessionApi
+      ResourceId: !Ref ProfileResource
+      HttpMethod: PUT
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SessionCreateFunction.Arn}/invocations'
+
+  RecipeImagePostMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref SessionApi
+      ResourceId: !Ref RecipeImageResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SessionCreateFunction.Arn}/invocations'
+
+  # Lambda Permissions
+  SessionCreatePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref SessionCreateFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${SessionApi}/*/*'
+
+  # API Deployment
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - SessionsPostMethod
+      - SessionGetMethod
+      - ProfilePutMethod
+      - RecipeImagePostMethod
+    Properties:
+      RestApiId: !Ref SessionApi
+      StageName: !Ref Environment
+
+Outputs:
+  ApiEndpoint:
+    Description: "API Gateway endpoint URL"
+    Value: !Sub "https://${SessionApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}"
+    Export:
+      Name: !Sub "${AWS::StackName}-ApiEndpoint"
+  
+  SessionsTableName:
+    Description: "DynamoDB table name"
+    Value: !Ref SessionsTable
+    Export:
+      Name: !Sub "${AWS::StackName}-SessionsTable"
+
+  ApiId:
+    Description: "API Gateway ID"
+    Value: !Ref SessionApi
+    Export:
+      Name: !Sub "${AWS::StackName}-ApiId"
