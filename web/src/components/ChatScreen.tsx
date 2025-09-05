@@ -543,7 +543,7 @@ export default function ChatScreen() {
     };
 
     try {
-      // TODO: 실제 서버 통신으로 교체
+      // TODO: Phase 3 - 백엔드로 프로필 제출 및 폴링 시작
       // const response = await fetch('/api/process', {
       //   method: 'POST',
       //   headers: { 'Content-Type': 'application/json' },
@@ -553,6 +553,7 @@ export default function ChatScreen() {
       //   })
       // });
       // const { executionId } = await response.json();
+      // setShowResult(true); // 폴링 시작하자마자 로딩 화면 표시
       
       // // 폴링 시작 (3초마다 상태 확인)
       // const pollInterval = setInterval(async () => {
@@ -562,7 +563,6 @@ export default function ChatScreen() {
       //   if (status === 'completed') {
       //     clearInterval(pollInterval);
       //     setCurrentRecipe(result.recipe);
-      //     setShowResult(true);
       //     setIsLoading(false);
       //   }
       // }, 3000);
