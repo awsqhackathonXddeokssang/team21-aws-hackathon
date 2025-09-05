@@ -18,6 +18,7 @@ export default function ChatScreen() {
   const [showTextInput, setShowTextInput] = useState(false);
   const [sessionId, setSessionId] = useState<string>('');  // 세션 ID 관리
   const [conversationPhase, setConversationPhase] = useState<'basic' | 'additional' | 'complete'>('basic');
+  const [activeTab, setActiveTab] = useState<'recipe' | 'shopping' | 'nutrition'>('recipe');
 
   // 마지막 메시지 기반 선택지 표시 로직
   const lastMessage = messages[messages.length - 1];
@@ -399,19 +400,78 @@ export default function ChatScreen() {
       {showResult && !isLoading && currentRecipe && (
         <div className="flex-1 p-4 overflow-y-auto">
           <div className="max-w-2xl mx-auto">
-            <h2 className="text-2xl font-bold text-gray-800 mb-4">{currentRecipe.name}</h2>
+            <h2 className="text-2xl font-bold text-gray-800 mb-4 text-center">{currentRecipe.name}</h2>
+            
+            {/* 탭 버튼들 */}
+            <div className="flex border-b border-gray-200 mb-6">
+              <button
+                onClick={() => setActiveTab('recipe')}
+                className={`flex-1 py-3 px-4 text-center font-medium transition-colors relative ${
+                  activeTab === 'recipe'
+                    ? 'text-orange-600 border-b-2 border-orange-600'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                <span className="flex items-center justify-center">
+                  📜 <span className="ml-2">레시피</span>
+                </span>
+              </button>
+              <button
+                onClick={() => setActiveTab('shopping')}
+                className={`flex-1 py-3 px-4 text-center font-medium transition-colors relative ${
+                  activeTab === 'shopping'
+                    ? 'text-orange-600 border-b-2 border-orange-600'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                <span className="flex items-center justify-center">
+                  🛒 <span className="ml-2">장보기</span>
+                </span>
+              </button>
+              <button
+                onClick={() => setActiveTab('nutrition')}
+                className={`flex-1 py-3 px-4 text-center font-medium transition-colors relative ${
+                  activeTab === 'nutrition'
+                    ? 'text-orange-600 border-b-2 border-orange-600'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                <span className="flex items-center justify-center">
+                  📊 <span className="ml-2">영양정보</span>
+                </span>
+              </button>
+            </div>
+
+            {/* 탭 내용 */}
             <div className="bg-white rounded-lg shadow-lg p-6">
-              <p className="text-gray-600 mb-4">{currentRecipe.description}</p>
-              <div className="grid grid-cols-2 gap-4 mb-6">
-                <div className="text-center p-3 bg-orange-50 rounded-lg">
-                  <p className="text-sm text-gray-600">조리시간</p>
-                  <p className="text-lg font-semibold text-orange-600">{currentRecipe.cookingTime}</p>
+              {activeTab === 'recipe' && (
+                <div>
+                  <p className="text-gray-600 mb-4">{currentRecipe.description}</p>
+                  <div className="grid grid-cols-2 gap-4 mb-6">
+                    <div className="text-center p-3 bg-orange-50 rounded-lg">
+                      <p className="text-sm text-gray-600">조리시간</p>
+                      <p className="text-lg font-semibold text-orange-600">{currentRecipe.cookingTime}</p>
+                    </div>
+                    <div className="text-center p-3 bg-orange-50 rounded-lg">
+                      <p className="text-sm text-gray-600">칼로리</p>
+                      <p className="text-lg font-semibold text-orange-600">{currentRecipe.calories}kcal</p>
+                    </div>
+                  </div>
                 </div>
-                <div className="text-center p-3 bg-orange-50 rounded-lg">
-                  <p className="text-sm text-gray-600">칼로리</p>
-                  <p className="text-lg font-semibold text-orange-600">{currentRecipe.calories}kcal</p>
+              )}
+
+              {activeTab === 'shopping' && (
+                <div className="text-center py-8">
+                  <p className="text-gray-500">장보기 정보가 여기 표시됩니다</p>
                 </div>
-              </div>
+              )}
+
+              {activeTab === 'nutrition' && (
+                <div className="text-center py-8">
+                  <p className="text-gray-500">영양 정보가 여기 표시됩니다</p>
+                </div>
+              )}
+
               <button 
                 onClick={() => {
                   setShowResult(false);
@@ -421,8 +481,9 @@ export default function ChatScreen() {
                   setCurrentStep(0);
                   setAdditionalQuestions([]);
                   setConversationPhase('basic');
+                  setActiveTab('recipe');
                 }}
-                className="w-full py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
+                className="w-full py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors mt-6"
               >
                 새로운 레시피 만들기
               </button>
