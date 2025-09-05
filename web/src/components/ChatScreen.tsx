@@ -180,7 +180,7 @@ export default function ChatScreen() {
         {/* 타겟 선택 버튼들 */}
         {showTargetSelection && (
           <div className="flex justify-start ml-2">
-            <div className="max-w-[85%]">
+            <div className="w-full">
               <div className="grid grid-cols-2 gap-2">
                 {targetInfos.map((target) => (
                   <button
@@ -204,7 +204,7 @@ export default function ChatScreen() {
         {/* 옵션 선택 버튼들 */}
         {currentOptions.length > 0 && (
           <div className="flex justify-start ml-2">
-            <div className="max-w-[85%]">
+            <div className="w-full">
               <div className="grid grid-cols-2 gap-2">
                 {currentOptions.map((option, index) => (
                   <button
