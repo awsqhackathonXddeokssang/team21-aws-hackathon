@@ -61,7 +61,7 @@ Resources:
                         "Payload": {
                           "sessionId.$": "$.sessionId",
                           "profile.$": "$.profile",
-                          "ingredients.$": "$.recipeResult.recipe.ingredients"
+                          "recipeResult.$": "$.recipeResult"
                         }
                       },
                       "ResultSelector": {
