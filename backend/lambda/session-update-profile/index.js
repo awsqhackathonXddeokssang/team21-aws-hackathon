@@ -165,11 +165,9 @@ exports.handler = async (event) => {
         await dynamodb.send(new UpdateItemCommand({
             TableName: process.env.SESSIONS_TABLE_NAME,
             Key: { sessionId: { S: sessionId } },
-            UpdateExpression: 'SET profile = :profile, #status = :status, updatedAt = :updatedAt',
-            ExpressionAttributeNames: { '#status': 'status' },
+            UpdateExpression: 'SET profile = :profile, updatedAt = :updatedAt',
             ExpressionAttributeValues: {
                 ':profile': { S: JSON.stringify(updatedProfile) },
-                ':status': { S: 'additional_info_collected' },
                 ':updatedAt': { S: new Date().toISOString() }
             }
         }));
@@ -179,7 +177,7 @@ exports.handler = async (event) => {
             headers,
             body: JSON.stringify({
                 sessionId,
-                status: 'additional_info_collected',
+                status: getResult.Item.status.S,  // 기존 status 유지
                 profile: updatedProfile,
                 updatedAt: new Date().toISOString()
             })
