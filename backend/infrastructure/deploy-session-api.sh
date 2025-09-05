@@ -14,6 +14,8 @@ aws cloudformation deploy \
 
 if [ $? -ne 0 ]; then
   echo "❌ CloudFormation deployment failed!"
+  echo "📋 Stack events:"
+  aws cloudformation describe-stack-events --stack-name ${STACK_NAME} --region ${REGION} --max-items 10 || true
   exit 1
 fi
 
