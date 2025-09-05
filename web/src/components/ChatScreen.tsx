@@ -792,8 +792,103 @@ export default function ChatScreen() {
               )}
 
               {activeTab === 'nutrition' && (
-                <div className="text-center py-8">
-                  <p className="text-gray-500">영양 정보가 여기 표시됩니다</p>
+                <div>
+                  {currentRecipe?.nutrition ? (
+                    <div className="space-y-6">
+                      {/* 영양 성분 박스 */}
+                      <div className="border border-gray-200 rounded-lg p-6 bg-white">
+                        <h4 className="font-semibold text-gray-800 mb-4">영양 성분</h4>
+                        
+                        {/* 칼로리 */}
+                        <div className="text-center mb-6">
+                          <span className="text-3xl font-bold text-orange-600">{currentRecipe.nutrition.calories}</span>
+                          <span className="text-lg text-gray-600 ml-2">kcal</span>
+                        </div>
+
+                        {/* 영양소 막대 그래프 */}
+                        <div className="space-y-4">
+                          {/* 탄수화물 */}
+                          <div>
+                            <div className="flex justify-between mb-2">
+                              <span className="text-sm font-medium text-gray-700">탄수화물</span>
+                              <span className="text-sm text-gray-600">{currentRecipe.nutrition.carbs}g</span>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-3">
+                              <div 
+                                className="bg-blue-500 h-3 rounded-full transition-all duration-500"
+                                style={{ 
+                                  width: `${(currentRecipe.nutrition.carbs / (currentRecipe.nutrition.carbs + currentRecipe.nutrition.protein + currentRecipe.nutrition.fat) * 100)}%` 
+                                }}
+                              ></div>
+                            </div>
+                          </div>
+
+                          {/* 단백질 */}
+                          <div>
+                            <div className="flex justify-between mb-2">
+                              <span className="text-sm font-medium text-gray-700">단백질</span>
+                              <span className="text-sm text-gray-600">{currentRecipe.nutrition.protein}g</span>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-3">
+                              <div 
+                                className="bg-red-500 h-3 rounded-full transition-all duration-500"
+                                style={{ 
+                                  width: `${(currentRecipe.nutrition.protein / (currentRecipe.nutrition.carbs + currentRecipe.nutrition.protein + currentRecipe.nutrition.fat) * 100)}%` 
+                                }}
+                              ></div>
+                            </div>
+                          </div>
+
+                          {/* 지방 */}
+                          <div>
+                            <div className="flex justify-between mb-2">
+                              <span className="text-sm font-medium text-gray-700">지방</span>
+                              <span className="text-sm text-gray-600">{currentRecipe.nutrition.fat}g</span>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-3">
+                              <div 
+                                className="bg-yellow-500 h-3 rounded-full transition-all duration-500"
+                                style={{ 
+                                  width: `${(currentRecipe.nutrition.fat / (currentRecipe.nutrition.carbs + currentRecipe.nutrition.protein + currentRecipe.nutrition.fat) * 100)}%` 
+                                }}
+                              ></div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 케톤 매크로 비율 (케토 타겟일 때만) */}
+                      {selectedTarget === 'keto' && currentRecipe.nutrition.carbsPercent && (
+                        <div className="border border-gray-200 rounded-lg p-6 bg-white">
+                          <h4 className="font-semibold text-gray-800 mb-4">케톤 매크로 비율</h4>
+                          <div className="grid grid-cols-3 gap-4 text-center">
+                            <div>
+                              <div className="text-2xl font-bold text-blue-500 mb-1">
+                                {currentRecipe.nutrition.carbsPercent}%
+                              </div>
+                              <div className="text-sm text-gray-600">탄수화물</div>
+                            </div>
+                            <div>
+                              <div className="text-2xl font-bold text-red-500 mb-1">
+                                {currentRecipe.nutrition.proteinPercent}%
+                              </div>
+                              <div className="text-sm text-gray-600">단백질</div>
+                            </div>
+                            <div>
+                              <div className="text-2xl font-bold text-yellow-500 mb-1">
+                                {currentRecipe.nutrition.fatPercent}%
+                              </div>
+                              <div className="text-sm text-gray-600">지방</div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <p className="text-gray-500">영양 정보를 불러오는 중...</p>
+                    </div>
+                  )}
                 </div>
               )}
 
