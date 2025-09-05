@@ -1,18 +1,13 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'AI Chef API Gateway for Session Processing and Results'
-
-Parameters:
-  Environment:
-    Type: String
-    Default: dev
+Description: 'AI Chef Result API - Simple'
 
 Resources:
   # API Gateway
   ApiGateway:
     Type: AWS::ApiGateway::RestApi
     Properties:
-      Name: !Sub 'ai-chef-api-${Environment}'
-      Description: 'AI Chef Session Processing API'
+      Name: 'ai-chef-result-api'
+      Description: 'AI Chef Result API'
       EndpointConfiguration:
         Types:
           - REGIONAL
@@ -33,14 +28,6 @@ Resources:
       ParentId: !Ref SessionResource
       PathPart: '{id}'
 
-  # Process Resource
-  ProcessResource:
-    Type: AWS::ApiGateway::Resource
-    Properties:
-      RestApiId: !Ref ApiGateway
-      ParentId: !Ref SessionIdResource
-      PathPart: 'process'
-
   # Result Resource
   ResultResource:
     Type: AWS::ApiGateway::Resource
@@ -48,19 +35,6 @@ Resources:
       RestApiId: !Ref ApiGateway
       ParentId: !Ref SessionIdResource
       PathPart: 'result'
-
-  # POST Method for Process
-  ProcessMethod:
-    Type: AWS::ApiGateway::Method
-    Properties:
-      RestApiId: !Ref ApiGateway
-      ResourceId: !Ref ProcessResource
-      HttpMethod: POST
-      AuthorizationType: NONE
-      Integration:
-        Type: AWS_PROXY
-        IntegrationHttpMethod: POST
-        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:ai-chef-process/invocations'
 
   # GET Method for Result
   ResultGetMethod:
@@ -73,31 +47,10 @@ Resources:
       Integration:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
-        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:ai-chef-result/invocations'
-
-  # OPTIONS Method for Process CORS
-  ProcessOptionsMethod:
-    Type: AWS::ApiGateway::Method
-    Properties:
-      RestApiId: !Ref ApiGateway
-      ResourceId: !Ref ProcessResource
-      HttpMethod: OPTIONS
-      AuthorizationType: NONE
-      Integration:
-        Type: MOCK
-        IntegrationResponses:
-          - StatusCode: 200
-            ResponseParameters:
-              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
-              method.response.header.Access-Control-Allow-Origin: "'*'"
-        RequestTemplates:
-          application/json: '{"statusCode": 200}'
+        Uri: 'arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:491085385364:function:ai-chef-result-dev/invocations'
       MethodResponses:
         - StatusCode: 200
           ResponseParameters:
-            method.response.header.Access-Control-Allow-Headers: false
-            method.response.header.Access-Control-Allow-Methods: false
             method.response.header.Access-Control-Allow-Origin: false
 
   # OPTIONS Method for Result CORS
@@ -125,20 +78,11 @@ Resources:
             method.response.header.Access-Control-Allow-Methods: false
             method.response.header.Access-Control-Allow-Origin: false
 
-  # Lambda Permission for Process API Gateway
-  ProcessLambdaApiGatewayPermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: 'ai-chef-process'
-      Action: lambda:InvokeFunction
-      Principal: apigateway.amazonaws.com
-      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/POST/session/*/process'
-
   # Lambda Permission for Result API Gateway
   ResultLambdaApiGatewayPermission:
     Type: AWS::Lambda::Permission
     Properties:
-      FunctionName: 'ai-chef-result'
+      FunctionName: 'ai-chef-result-dev'
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/GET/session/*/result'
@@ -147,21 +91,15 @@ Resources:
   ApiDeployment:
     Type: AWS::ApiGateway::Deployment
     DependsOn:
-      - ProcessMethod
-      - ProcessOptionsMethod
       - ResultGetMethod
       - ResultOptionsMethod
     Properties:
       RestApiId: !Ref ApiGateway
-      StageName: !Ref Environment
+      StageName: prod
 
 Outputs:
   ApiGatewayUrl:
-    Description: 'API Gateway URL'
-    Value: !Sub 'https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+    Description: 'Result API Gateway URL'
+    Value: !Sub 'https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod'
     Export:
       Name: !Sub '${AWS::StackName}-ApiGatewayUrl'
-      
-  ApiGatewayId:
-    Description: 'API Gateway ID'
-    Value: !Ref ApiGateway
