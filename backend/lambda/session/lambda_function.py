@@ -18,9 +18,16 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
     """Session 처리 Lambda 핸들러"""
     try:
         # API Gateway 이벤트 파싱
-        session_id = event['pathParameters']['id']
         body = json.loads(event['body'])
+        session_id = body.get('sessionId')
         user_profile = body.get('userProfile')
+        
+        if not session_id:
+            return {
+                'statusCode': 400,
+                'headers': headers,
+                'body': json.dumps({'error': 'Session ID is required'})
+            }
         
         logger.info(f"Processing session: {session_id}")
         
