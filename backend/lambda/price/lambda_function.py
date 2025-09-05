@@ -25,8 +25,49 @@ results_table = dynamodb.Table('ai-chef-results')
 def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
     """Price Lambda handler - Results 테이블 저장"""
     try:
+        print(f"🔍 Price Lambda 입력 데이터: {json.dumps(event, ensure_ascii=False)}")
+        
         session_id = event.get('sessionId')
-        ingredients = event.get('ingredients', [])
+        
+        # Recipe 결과에서 ingredients 추출
+        ingredients = []
+        
+        # 직접 ingredients가 있는 경우
+        if 'ingredients' in event:
+            ingredients = event['ingredients']
+            print(f"✅ 직접 ingredients 발견: {ingredients}")
+        
+        # recipeResult에서 추출하는 경우
+        elif 'recipeResult' in event:
+            print("🔍 recipeResult에서 추출 시도")
+            recipe_result = event['recipeResult']
+            if 'recipe' in recipe_result:
+                recipe_data = recipe_result['recipe']
+                print(f"🔍 recipe_data 타입: {type(recipe_data)}")
+                
+                # JSON 문자열인 경우 파싱
+                if isinstance(recipe_data, str):
+                    print("🔍 JSON 문자열 파싱 시도")
+                    recipe_obj = json.loads(recipe_data)
+                    print(f"🔍 파싱된 객체: {recipe_obj}")
+                    ingredients = recipe_obj.get('recipe', {}).get('ingredients', [])
+                    print(f"✅ 추출된 ingredients: {ingredients}")
+                else:
+                    ingredients = recipe_data.get('ingredients', [])
+        
+        # body.recipe에서 추출하는 경우
+        elif 'body' in event and 'recipe' in event['body']:
+            print("🔍 body.recipe에서 추출 시도")
+            recipe = event['body']['recipe']
+            ingredients = recipe.get('ingredients', [])
+        
+        # ingredients가 객체 배열인 경우 name만 추출
+        if ingredients and isinstance(ingredients[0], dict):
+            print("🔍 객체 배열에서 name 추출")
+            ingredients = [ing.get('name', str(ing)) for ing in ingredients]
+        
+        print(f"🎯 최종 ingredients: {ingredients}")
+        print(f"🎯 sessionId: {session_id}")
         
         if not session_id or not ingredients:
             return {
