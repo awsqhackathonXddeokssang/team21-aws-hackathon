@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e  # Exit on any error
 
 STACK_NAME="ai-chef-session-api"
 REGION="us-east-1"
@@ -10,6 +11,11 @@ aws cloudformation deploy \
   --stack-name ${STACK_NAME} \
   --capabilities CAPABILITY_IAM \
   --region ${REGION}
+
+if [ $? -ne 0 ]; then
+  echo "❌ CloudFormation deployment failed!"
+  exit 1
+fi
 
 API_URL=$(aws cloudformation describe-stacks \
   --stack-name ${STACK_NAME} \
