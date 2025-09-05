@@ -19,6 +19,7 @@ export default function ChatScreen() {
   const [sessionId, setSessionId] = useState<string>('');  // 세션 ID 관리
   const [conversationPhase, setConversationPhase] = useState<'basic' | 'additional' | 'complete'>('basic');
   const [activeTab, setActiveTab] = useState<'recipe' | 'shopping' | 'nutrition'>('recipe');
+  const [checkedItems, setCheckedItems] = useState<{[key: string]: boolean}>({});
 
   // 마지막 메시지 기반 선택지 표시 로직
   const lastMessage = messages[messages.length - 1];
@@ -198,6 +199,28 @@ export default function ChatScreen() {
       }
     ];
     return questions[currentStep - 1] || questions[0];
+  };
+
+  const handleCheckItem = (itemName: string) => {
+    setCheckedItems(prev => ({
+      ...prev,
+      [itemName]: !prev[itemName]
+    }));
+  };
+
+  const calculateTotal = () => {
+    if (!currentRecipe?.ingredients) return 0;
+    
+    return currentRecipe.ingredients
+      .filter(ingredient => checkedItems[ingredient.name])
+      .reduce((total, ingredient) => {
+        const minPrice = Math.min(...ingredient.prices.map(p => p.price));
+        return total + minPrice;
+      }, 0);
+  };
+
+  const formatPrice = (price: number) => {
+    return price.toLocaleString('ko-KR') + '원';
   };
 
   const generateRecipe = async () => {
@@ -551,8 +574,76 @@ export default function ChatScreen() {
               )}
 
               {activeTab === 'shopping' && (
-                <div className="text-center py-8">
-                  <p className="text-gray-500">장보기 정보가 여기 표시됩니다</p>
+                <div className="pb-20">
+                  {currentRecipe?.ingredients ? (
+                    <div className="space-y-4">
+                      <h4 className="font-semibold text-gray-800 mb-4">필요한 재료</h4>
+                      
+                      {currentRecipe.ingredients.map((ingredient, index) => {
+                        const minPrice = Math.min(...ingredient.prices.map(p => p.price));
+                        const isChecked = checkedItems[ingredient.name] || false;
+                        
+                        return (
+                          <div key={index} className="border border-gray-200 rounded-lg p-4">
+                            <div className="flex items-start mb-3">
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={() => handleCheckItem(ingredient.name)}
+                                className="mt-1 mr-3 w-4 h-4 text-orange-600 rounded focus:ring-orange-500"
+                              />
+                              <div className="flex-1">
+                                <h5 className="font-medium text-gray-800">{ingredient.name}</h5>
+                                <p className="text-sm text-gray-600">{ingredient.amount}</p>
+                              </div>
+                            </div>
+                            
+                            <div className="ml-7 space-y-2">
+                              {ingredient.prices.map((priceInfo, priceIndex) => (
+                                <div key={priceIndex} className="flex justify-between items-center">
+                                  <span className="text-sm text-gray-600">{priceInfo.vendor}</span>
+                                  <div className="flex items-center">
+                                    <span className={`font-medium ${
+                                      priceInfo.price === minPrice 
+                                        ? 'text-orange-600' 
+                                        : 'text-gray-500'
+                                    }`}>
+                                      {formatPrice(priceInfo.price)}
+                                    </span>
+                                    {priceInfo.price === minPrice && (
+                                      <span className="ml-2 text-xs bg-orange-100 text-orange-600 px-2 py-1 rounded-full">
+                                        👑 최저가
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <p className="text-gray-500">재료 정보를 불러오는 중...</p>
+                    </div>
+                  )}
+                  
+                  {/* 고정된 하단 총액 표시 */}
+                  <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 shadow-lg">
+                    <div className="max-w-2xl mx-auto flex justify-between items-center">
+                      <div>
+                        <p className="text-sm text-gray-600">
+                          선택한 재료 ({Object.values(checkedItems).filter(Boolean).length}/{currentRecipe?.ingredients?.length || 0}개)
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-lg font-bold text-orange-600">
+                          예상 금액: {formatPrice(calculateTotal())}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -572,6 +663,7 @@ export default function ChatScreen() {
                   setAdditionalQuestions([]);
                   setConversationPhase('basic');
                   setActiveTab('recipe');
+                  setCheckedItems({});
                 }}
                 className="w-full py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors mt-6"
               >
