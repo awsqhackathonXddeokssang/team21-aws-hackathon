@@ -74,20 +74,8 @@ Resources:
 
           def lambda_handler(event, context):
               try:
-                  http_method = event['httpMethod']
-                  
-                  if http_method == 'POST' and event['resource'] == '/sessions':
-                      return create_session(event, context)
-                  elif http_method == 'GET' and event['resource'] == '/sessions':
-                      return list_sessions(event, context)
-                  elif http_method == 'POST' and '/sessions/' in event['resource']:
-                      return process_session(event, context)
-                  else:
-                      return {
-                          'statusCode': 404,
-                          'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
-                          'body': json.dumps({'error': 'Not Found'})
-                      }
+                  # 모든 요청을 프로세스로 처리 (메서드/패스 구분 없음)
+                  return process_session(event, context)
               except Exception as e:
                   logger.error(f"Error: {str(e)}")
                   return {
@@ -127,53 +115,58 @@ Resources:
               }
 
           def process_session(event, context):
-              session_id = event['pathParameters']['id']
-              body = json.loads(event['body'])
-              user_profile = body.get('userProfile')
-              
-              if not user_profile or 'target' not in user_profile:
+              try:
+                  body = json.loads(event['body']) if event.get('body') else {}
+                  session_id = body.get('sessionId')
+                  
+                  if not session_id:
+                      return {
+                          'statusCode': 400,
+                          'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                          'body': json.dumps({'error': 'sessionId required'})
+                      }
+                  
+                  # DynamoDB에서 세션 조회 (필수)
+                  response = sessions_table.get_item(Key={'sessionId': session_id})
+                  if 'Item' not in response:
+                      return {
+                          'statusCode': 404,
+                          'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                          'body': json.dumps({'error': 'Session not found'})
+                      }
+                  
+                  session_data = response['Item']
+                  profile = json.loads(session_data.get('profile', '{}'))
+                  
+                  # Step Functions 워크플로우 시작
+                  workflow_input = {
+                      'sessionId': session_id,
+                      'profile': profile
+                  }
+                  
+                  sf_response = stepfunctions.start_execution(
+                      stateMachineArn='arn:aws:states:us-east-1:491085385364:stateMachine:ai-chef-workflow',
+                      name=f'execution-{int(datetime.now().timestamp())}',
+                      input=json.dumps(workflow_input)
+                  )
+                  
                   return {
-                      'statusCode': 400,
+                      'statusCode': 200,
                       'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
-                      'body': json.dumps({'success': False, 'error': 'INVALID_PROFILE'})
+                      'body': json.dumps({
+                          'success': True,
+                          'executionId': sf_response['executionArn'],
+                          'estimatedTime': 30,
+                          'status': 'processing'
+                      })
                   }
-              
-              sessions_table.update_item(
-                  Key={'sessionId': session_id},
-                  UpdateExpression="SET #status = :status, #profile = :profile, #updatedAt = :updatedAt",
-                  ExpressionAttributeNames={'#status': 'status', '#profile': 'profile', '#updatedAt': 'updatedAt'},
-                  ExpressionAttributeValues={
-                      ':status': 'processing',
-                      ':profile': user_profile,
-                      ':updatedAt': datetime.now().isoformat()
+              except Exception as e:
+                  logger.error(f"Process session error: {str(e)}")
+                  return {
+                      'statusCode': 500,
+                      'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                      'body': json.dumps({'error': 'Failed to start workflow'})
                   }
-              )
-              
-              workflow_input = {
-                  'sessionId': session_id,
-                  'profile': {
-                      'target': user_profile.get('target'),
-                      'budget': int(user_profile.get('responses', {}).get('100', 20000)),
-                      'servings': int(user_profile.get('responses', {}).get('101', 2))
-                  }
-              }
-              
-              response = stepfunctions.start_execution(
-                  stateMachineArn='arn:aws:states:us-east-1:491085385364:stateMachine:ai-chef-workflow',
-                  name=f'execution-{int(datetime.now().timestamp())}',
-                  input=json.dumps(workflow_input)
-              )
-              
-              return {
-                  'statusCode': 200,
-                  'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
-                  'body': json.dumps({
-                      'success': True,
-                      'executionId': response['executionArn'],
-                      'estimatedTime': 30,
-                      'status': 'processing'
-                  })
-              }
 
   # API Gateway
   ApiGateway:
