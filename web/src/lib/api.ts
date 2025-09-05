@@ -60,4 +60,36 @@ export class ApiService {
       throw error;
     }
   }
+
+  static async updateProfile(sessionId: string, profile: any, userPrompt?: string): Promise<any> {
+    try {
+      console.log('🔄 API 호출 시작 - updateProfile');
+      const url = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.UPDATE}`;
+      console.log('📍 API URL:', url);
+      
+      const requestBody: any = { ...profile };
+      if (userPrompt) {
+        requestBody.userPrompt = userPrompt;
+      }
+      
+      const response = await this.fetchWithTimeout(url, {
+        method: 'POST',
+        body: JSON.stringify(requestBody),
+      });
+
+      console.log('📡 API 응답 상태:', response.status, response.statusText);
+
+      if (!response.ok) {
+        throw new ApiError(response.status, `HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      
+      console.log('✅ Profile Updated:', data);
+      return data;
+    } catch (error) {
+      console.error('❌ Profile update failed:', error);
+      throw error;
+    }
+  }
 }

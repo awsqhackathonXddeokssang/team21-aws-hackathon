@@ -1,0 +1,18 @@
+{
+    "sessionId": "test_session_123",
+    "profile": {"target": "keto", "cookingLevel": "beginner"},
+    "recipeResult": {
+        "name": "케토 아보카도 샐러드",
+        "ingredients": [{"name": "아보카도", "amount": "2개"}],
+        "instructions": ["아보카도를 썰어주세요"],
+        "nutrition": {"calories": 350, "protein": 4, "fat": 32},
+        "targetCompliance": {"keto": true}
+    },
+    "pricingResult": {
+        "summary": {"totalIngredients": 1, "foundIngredients": 1, "successRate": 1},
+        "ingredients": {
+            "아보카도": [{"name": "신선한 아보카도", "price": 3500, "vendor": "마트A"}]
+        },
+        "recommendations": {"totalEstimatedCost": 3500}
+    }
+}
