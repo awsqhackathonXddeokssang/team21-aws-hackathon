@@ -1,0 +1,59 @@
+import { SessionResponse } from '@/types';
+import { API_CONFIG } from '@/config/api';
+
+class ApiError extends Error {
+  constructor(public status: number, message: string) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
+export class ApiService {
+  private static async fetchWithTimeout(url: string, options: RequestInit = {}): Promise<Response> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.TIMEOUT);
+
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+        headers: {
+          'Content-Type': 'application/json',
+          ...options.headers,
+        },
+      });
+
+      clearTimeout(timeoutId);
+      return response;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new ApiError(408, 'Request timeout');
+      }
+      throw error;
+    }
+  }
+
+  static async startSession(): Promise<SessionResponse> {
+    try {
+      const url = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.SESSIONS}`;
+      
+      const response = await this.fetchWithTimeout(url, {
+        method: 'POST',
+        body: JSON.stringify({}),
+      });
+
+      if (!response.ok) {
+        throw new ApiError(response.status, `HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      
+      console.log('Real API Session Created:', data);
+      return data;
+    } catch (error) {
+      console.error('Session creation failed:', error);
+      throw error;
+    }
+  }
+}
