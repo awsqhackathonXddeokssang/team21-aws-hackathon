@@ -176,6 +176,47 @@ export default function ChatScreen() {
             </div>
           </div>
         ))}
+
+        {/* 타겟 선택 버튼들 */}
+        {showTargetSelection && (
+          <div className="flex justify-start">
+            <div className="max-w-[85%]">
+              <div className="grid grid-cols-2 gap-2">
+                {targetInfos.map((target) => (
+                  <button
+                    key={target.id}
+                    onClick={() => handleTargetSelect(target.id)}
+                    className="py-3 px-4 rounded-lg bg-gray-100 hover:bg-orange-100 hover:border-orange-300 border border-gray-300 transition-colors duration-200 text-left"
+                  >
+                    <div className="flex items-center">
+                      <span className="text-xl mr-3">{target.icon}</span>
+                      <span className="text-sm font-medium text-gray-800">{target.name}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 옵션 선택 버튼들 */}
+        {currentOptions.length > 0 && (
+          <div className="flex justify-start">
+            <div className="max-w-[85%]">
+              <div className="grid grid-cols-2 gap-2">
+                {currentOptions.map((option, index) => (
+                  <button
+                    key={index}
+                    onClick={() => handleOptionSelect(option)}
+                    className="py-3 px-4 rounded-lg bg-gray-100 hover:bg-orange-100 hover:border-orange-300 border border-gray-300 transition-colors duration-200 text-left"
+                  >
+                    <span className="text-sm font-medium text-gray-800">{option}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
