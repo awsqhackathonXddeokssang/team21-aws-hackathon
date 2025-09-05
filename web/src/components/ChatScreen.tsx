@@ -150,6 +150,18 @@ export default function ChatScreen() {
     return questions[currentStep - 1] || questions[0];
   };
 
+  const generateRecipe = async () => {
+    try {
+      const recipe = await MockApiService.generateRecipe(selectedTarget!, '맞춤 레시피');
+      setCurrentRecipe(recipe);
+      setShowResult(true);
+      setIsLoading(false);
+    } catch (error) {
+      console.error('Error:', error);
+      setIsLoading(false);
+    }
+  };
+
   const handleTextInput = async (inputText: string) => {
     // 사용자 입력 메시지 추가
     const userMessage: ChatMessage = {
