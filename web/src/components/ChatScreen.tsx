@@ -16,11 +16,21 @@ export default function ChatScreen() {
   const [currentStep, setCurrentStep] = useState(0);
   const [additionalQuestions, setAdditionalQuestions] = useState<string[]>([]);
   const [showTextInput, setShowTextInput] = useState(false);
+  const [sessionId, setSessionId] = useState<string>('');  // 세션 ID 관리
+  const [conversationPhase, setConversationPhase] = useState<'basic' | 'additional' | 'complete'>('basic');
 
   // 마지막 메시지 기반 선택지 표시 로직
   const lastMessage = messages[messages.length - 1];
   const shouldShowOptions = lastMessage?.messageType === 'choice' && lastMessage?.options;
   const shouldShowTextInput = lastMessage?.messageType === 'text_input';
+
+  // 세션 초기화
+  useEffect(() => {
+    // 세션 생성 (실제로는 서버 호출 필요)
+    const newSessionId = `sess-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    setSessionId(newSessionId);
+    localStorage.setItem('sessionId', newSessionId);
+  }, []);
 
   // 초기 AI 메시지들
   useEffect(() => {
@@ -94,9 +104,12 @@ export default function ChatScreen() {
     setIsLoading(true);
 
     setTimeout(() => {
-      if (currentStep >= 2) {
+      // 추가 질문 단계인지 확인
+      const isAdditionalQuestionPhase = currentStep === 2 || conversationPhase === 'additional';
+      
+      if (isAdditionalQuestionPhase) {
         // 추가 질문 단계 처리
-        if (option === '네, 질문이 있어요') {
+        if (option === '네, 질문이 있어요' || option === '네, 더 있어요') {
           const textInputMessage: ChatMessage = {
             id: `ai-text-input-${Date.now()}`,
             type: 'ai',
@@ -106,13 +119,27 @@ export default function ChatScreen() {
           };
           setMessages(prev => [...prev, textInputMessage]);
           setShowTextInput(true);
-        } else if (option === '아니요, 충분해요') {
+          setConversationPhase('additional');
+        } else if (option === '아니요, 충분해요' || option === '아니요, 이제 충분해요') {
           // 제출하기 단계로
+          setConversationPhase('complete');
           handleSubmitProfile();
+        } else if (currentStep === 2) {
+          // Step 2에서 일반 옵션 선택 시 추가 질문 보여주기
+          const additionalQuestionMessage: ChatMessage = {
+            id: `ai-additional-${Date.now()}`,
+            type: 'ai',
+            content: '추가로 궁금한 점이나 특별한 요청사항이 있으신가요?',
+            timestamp: new Date(),
+            messageType: 'choice',
+            options: ['네, 질문이 있어요', '아니요, 충분해요']
+          };
+          setMessages(prev => [...prev, additionalQuestionMessage]);
+          setConversationPhase('additional');
         }
         setIsLoading(false);
       } else {
-        // 다음 질문 (currentStep 0, 1, 2)
+        // 기본 질문 단계 (currentStep 0, 1)
         const nextQuestion = getNextQuestion();
         const aiMessage: ChatMessage = {
           id: `ai-next-${Date.now()}`,
@@ -124,6 +151,11 @@ export default function ChatScreen() {
         };
         setMessages(prev => [...prev, aiMessage]);
         setCurrentStep(prev => prev + 1);
+        
+        // 마지막 기본 질문이었으면 추가 질문 단계로 전환
+        if (currentStep === 1) {
+          setConversationPhase('additional');
+        }
         setIsLoading(false);
       }
     }, 1000);
@@ -169,28 +201,70 @@ export default function ChatScreen() {
     setShowTextInput(false);
     setIsLoading(true);
 
-    setTimeout(() => {
-      // Mock AI 응답
-      const aiResponse: ChatMessage = {
-        id: `ai-response-${Date.now()}`,
+    try {
+      // TODO: 실제 서버 통신으로 교체 필요
+      // const response = await fetch('/api/session/update', {
+      //   method: 'POST',
+      //   headers: { 'Content-Type': 'application/json' },
+      //   body: JSON.stringify({
+      //     sessionId,
+      //     messages: messages.map(m => ({ role: m.type, content: m.content })),
+      //     newMessage: inputText,
+      //     profile: {
+      //       target: selectedTarget,
+      //       additionalQuestions
+      //     }
+      //   })
+      // });
+      // const data = await response.json();
+
+      // Mock 응답 (실제로는 서버에서 Bedrock 응답)
+      setTimeout(() => {
+        const aiResponse: ChatMessage = {
+          id: `ai-response-${Date.now()}`,
+          type: 'ai',
+          content: getContextualResponse(inputText), // 입력에 따른 맞춤 응답
+          timestamp: new Date()
+        };
+
+        // 다시 추가 질문 물어보기
+        const nextQuestion: ChatMessage = {
+          id: `ai-additional-${Date.now()}`,
+          type: 'ai',
+          content: '또 다른 질문이나 요청사항이 있으신가요?',
+          timestamp: new Date(),
+          messageType: 'choice',
+          options: ['네, 질문이 있어요', '아니요, 충분해요'] // 옵션 통일
+        };
+
+        setMessages(prev => [...prev, aiResponse, nextQuestion]);
+        setIsLoading(false);
+      }, 1000);
+    } catch (error) {
+      console.error('Error communicating with server:', error);
+      setIsLoading(false);
+      // 에러 메시지 추가
+      const errorMessage: ChatMessage = {
+        id: `ai-error-${Date.now()}`,
         type: 'ai',
-        content: '네, 알겠습니다! 레시피에 반영하겠어요.',
+        content: '죄송해요, 일시적인 오류가 발생했어요. 다시 시도해주세요.',
         timestamp: new Date()
       };
+      setMessages(prev => [...prev, errorMessage]);
+    }
+  };
 
-      // 다시 추가 질문 물어보기
-      const nextQuestion: ChatMessage = {
-        id: `ai-additional-${Date.now()}`,
-        type: 'ai',
-        content: '또 다른 질문이나 요청사항이 있으신가요?',
-        timestamp: new Date(),
-        messageType: 'choice',
-        options: ['네, 더 있어요', '아니요, 이제 충분해요']
-      };
-
-      setMessages(prev => [...prev, aiResponse, nextQuestion]);
-      setIsLoading(false);
-    }, 1000);
+  // 입력에 따른 맞춤 응답 생성 (임시)
+  const getContextualResponse = (input: string): string => {
+    if (input.includes('매운') || input.includes('매워')) {
+      return '매운 음식을 싫어하시는군요! 담백하고 부드러운 맛의 레시피로 준비하겠습니다. 🍳';
+    } else if (input.includes('알러지') || input.includes('알레르기')) {
+      return '알레르기 정보 감사합니다! 해당 재료를 제외하고 안전한 레시피를 추천해드릴게요. 🌿';
+    } else if (input.includes('채소') || input.includes('야채')) {
+      return '채소 관련 요청사항을 확인했습니다! 신선한 채소를 활용한 건강한 레시피로 구성하겠습니다. 🥗';
+    } else {
+      return '네, 알겠습니다! 말씀해주신 내용을 레시피에 반영하겠어요. 👨‍🍳';
+    }
   };
 
   const handleSubmitProfile = async () => {
@@ -202,13 +276,65 @@ export default function ChatScreen() {
     };
 
     setMessages(prev => [...prev, submitMessage]);
+    setIsLoading(true);
     
-    // TODO: Phase 3 - 백엔드로 프로필 제출
-    console.log('프로필 제출:', {
+    // 프로필 데이터 구성
+    const profileData = {
       target: selectedTarget,
+      servings: messages.find(m => m.content?.includes('인분'))?.content || '2인분',
+      cookingTime: messages.find(m => m.content?.includes('분'))?.content || '30분',
       additionalQuestions,
-      // 기타 수집된 정보들
-    });
+      conversationHistory: messages.map(m => ({
+        role: m.type,
+        content: m.content
+      }))
+    };
+
+    try {
+      // TODO: 실제 서버 통신으로 교체
+      // const response = await fetch('/api/process', {
+      //   method: 'POST',
+      //   headers: { 'Content-Type': 'application/json' },
+      //   body: JSON.stringify({
+      //     sessionId,
+      //     profile: profileData
+      //   })
+      // });
+      // const { executionId } = await response.json();
+      
+      // // 폴링 시작 (3초마다 상태 확인)
+      // const pollInterval = setInterval(async () => {
+      //   const statusResponse = await fetch(`/api/status/${executionId}`);
+      //   const { status, result } = await statusResponse.json();
+      //   
+      //   if (status === 'completed') {
+      //     clearInterval(pollInterval);
+      //     setCurrentRecipe(result.recipe);
+      //     setShowResult(true);
+      //     setIsLoading(false);
+      //   }
+      // }, 3000);
+
+      // Mock 처리 (실제로는 위의 폴링으로 대체)
+      setTimeout(async () => {
+        const recipe = await MockApiService.generateRecipe(selectedTarget!, '맞춤 레시피');
+        setCurrentRecipe(recipe);
+        setShowResult(true);
+        setIsLoading(false);
+      }, 3000);
+      
+    } catch (error) {
+      console.error('Error submitting profile:', error);
+      setIsLoading(false);
+      
+      const errorMessage: ChatMessage = {
+        id: `ai-error-${Date.now()}`,
+        type: 'ai',
+        content: '레시피 생성 중 오류가 발생했습니다. 다시 시도해주세요.',
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    }
   };
 
   const getTargetResponseMessage = (target: UserTarget): string => {
