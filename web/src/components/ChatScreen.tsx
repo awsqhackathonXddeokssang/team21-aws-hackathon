@@ -24,7 +24,6 @@ export default function ChatScreen() {
   const [checkedItems, setCheckedItems] = useState<{[key: string]: boolean}>({});
   
   // 폴링 관련 상태 추가
-  const [executionId, setExecutionId] = useState<string>('');
   const [progress, setProgress] = useState(0);
   const [progressMessage, setProgressMessage] = useState('');
   const [pollCount, setPollCount] = useState(0);
@@ -38,23 +37,23 @@ export default function ChatScreen() {
   const scrollToBottom = createScrollHandler(messagesEndRef);
 
   // 상태별 진행률 매핑
-  const getProgressInfo = (status: string, phase: string) => {
-    switch (phase) {
-      case 'recipe_generation':
-        return { progress: 40, message: '🤖 AI가 맞춤 레시피를 생성하고 있어요...' };
-      case 'price_fetching':
-        return { progress: 70, message: '💰 최저가 정보를 수집하고 있어요...' };
-      case 'combining':
-        return { progress: 90, message: '📋 결과를 정리하고 있어요...' };
+  const getProgressInfo = (status: string) => {
+    switch (status) {
+      case 'idle':
+        return { progress: 0, message: '⏳ 대기열에서 처리 대기 중...' };
+      case 'processing':
+        return { progress: 50, message: '🤖 AI가 맞춤 레시피를 생성하고 있어요...' };
       case 'completed':
         return { progress: 100, message: '✅ 완료되었습니다!' };
+      case 'failed':
+        return { progress: 0, message: '❌ 처리 중 오류가 발생했습니다.' };
       default:
         return { progress: 10, message: '🚀 처리를 시작하고 있어요...' };
     }
   };
 
   // 폴링 로직
-  const startPolling = async (executionId: string) => {
+  const startPolling = async () => {
     const maxPolls = 30;
     let pollCount = 0;
 
@@ -63,12 +62,19 @@ export default function ChatScreen() {
         pollCount++;
         setPollCount(pollCount);
 
-        const statusResponse = await fetch(`${API_CONFIG.BASE_URL}/sessions/${sessionId}/status`);
-        const { status, phase, result, error } = await statusResponse.json();
+        console.log(`🔄 Poll #${pollCount} - fetching status for sessionId:`, sessionId);
+        const statusUrl = `${API_CONFIG.BASE_URL}/sessions/${sessionId}/status`;
+        console.log('🌐 Status URL:', statusUrl);
+        const statusResponse = await fetch(statusUrl);
+        const responseData = await statusResponse.json();
+        console.log(`📊 Status response:`, responseData);
+        const { status, error } = responseData;
 
-        const progressInfo = getProgressInfo(status, phase);
+        const progressInfo = getProgressInfo(status);
+        console.log(`📈 Progress info:`, progressInfo);
         setProgress(progressInfo.progress);
         setProgressMessage(progressInfo.message);
+        console.log('🔸 Current render states - showResult:', showResult, 'isLoading:', isLoading, 'currentRecipe:', !!currentRecipe);
 
         if (status === 'completed') {
           clearInterval(pollInterval);
@@ -105,6 +111,7 @@ export default function ChatScreen() {
   // 폴링 에러 처리
   const handlePollingError = (errorMessage: string) => {
     setIsLoading(false);
+    setShowResult(false);  // 로딩 화면 숨기기
     setProgressMessage(`❌ ${errorMessage}`);
     // 재시도 옵션 제공
     setTimeout(() => {
@@ -117,6 +124,7 @@ export default function ChatScreen() {
   // 폴링 타임아웃 처리
   const handlePollingTimeout = () => {
     setIsLoading(false);
+    setShowResult(false);  // 로딩 화면 숨기기
     setProgressMessage('⏰ 처리 시간이 초과되었습니다.');
     setTimeout(() => {
       if (confirm('처리 시간이 초과되었습니다. 다시 시도하시겠습니까?')) {
@@ -544,35 +552,35 @@ export default function ChatScreen() {
     };
 
     setMessages(prev => [...prev, submitMessage]);
-    setIsLoading(true);
     
     try {
       // Phase 3 - 백엔드로 레시피 생성 요청
       const currentSessionId = sessionId || localStorage.getItem('sessionId') || '';
       if (!currentSessionId) {
         console.error('Session not initialized');
-        setIsLoading(false);
         return;
       }
       console.log('🍳 Starting recipe processing for session:', currentSessionId);
       const response = await ApiService.processRecipe(currentSessionId);
       console.log('✅ Recipe processing started:', response);
       
-      // executionId 저장 및 폴링 시작
-      const { executionId } = response;
-      setExecutionId(executionId);
+      // 폴링 시작
       setProgress(10);
       setProgressMessage('🚀 처리를 시작하고 있어요...');
       
-      // 로딩 화면으로 즉시 전환
+      // 로딩 화면으로 즉시 전환 - 동시에 설정!
+      setIsLoading(true);
       setShowResult(true);
+      console.log('🔍 Both states set: showResult=true, isLoading=true');
       
       // 폴링 시작
-      startPolling(executionId);
+      startPolling();
+      console.log('✅ startPolling called');
       
     } catch (error) {
       console.error('❌ Recipe processing failed:', error);
       setIsLoading(false);
+      setShowResult(false);  // 로딩 화면 숨기기
       
       // 에러 메시지 표시
       const errorMessage: ChatMessage = {
@@ -594,6 +602,14 @@ export default function ChatScreen() {
     };
     return messages[target];
   };
+
+  // 디버깅을 위한 상태 로깅
+  console.log('\n🎨 === RENDER === showResult:', showResult, 'isLoading:', isLoading);
+  console.log('📦 Conditions:');
+  console.log('  - Session error banner:', sessionError);
+  console.log('  - Loading overlay:', showResult && isLoading, '(should show modal)');
+  console.log('  - Recipe result:', showResult && !isLoading && currentRecipe);
+  console.log('  - Chat screen:', (!showResult || isLoading));
 
   return (
     <div className="h-screen bg-white flex flex-col">
@@ -631,10 +647,10 @@ export default function ChatScreen() {
           </div>
         </div>
       )}
-      {/* 로딩 화면 */}
+      {/* 로딩 오버레이 */}
       {showResult && isLoading && (
-        <div className="flex-1 flex items-center justify-center bg-gradient-to-br from-orange-50 to-orange-100">
-          <div className="text-center max-w-md mx-auto p-8">
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
+          <div className="bg-white rounded-lg shadow-xl p-8 max-w-md mx-4">
             <div className="mb-6">
               <div className="w-16 h-16 mx-auto mb-4 relative">
                 <div className="absolute inset-0 border-4 border-orange-200 rounded-full"></div>
@@ -656,13 +672,6 @@ export default function ChatScreen() {
                 {progressMessage || '맞춤 레시피 생성 중...'}
               </h2>
               <p className="text-gray-600">AI가 최적의 레시피와 최저가 정보를 찾고 있어요</p>
-              
-              {/* 폴링 카운트 표시 (개발용) */}
-              {pollCount > 0 && (
-                <div className="text-xs text-gray-400 mt-2">
-                  상태 확인: {pollCount}/30
-                </div>
-              )}
             </div>
             <div className="flex justify-center space-x-1">
               <div className="w-2 h-2 bg-orange-500 rounded-full animate-bounce"></div>
@@ -1037,7 +1046,7 @@ export default function ChatScreen() {
       )}
 
       {/* 채팅 화면 */}
-      {!showResult && (
+      {(!showResult || isLoading) && (
         <>
           {/* 헤더 */}
           <div className="p-4 bg-white border-b border-gray-100 shadow-sm">
