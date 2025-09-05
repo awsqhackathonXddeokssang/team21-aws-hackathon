@@ -66,48 +66,12 @@ export default function ChatScreen() {
 
         console.log(`🔄 Poll #${pollCount} - fetching status for sessionId:`, sessionId);
         
-        // 실제 API 호출 (주석 처리)
-        // const statusUrl = `${API_CONFIG.BASE_URL}/sessions/${sessionId}/status`;
-        // console.log('🌐 Status URL:', statusUrl);
-        // const statusResponse = await fetch(statusUrl);
-        // const responseData = await statusResponse.json();
-        
-        // Mock 데이터 - 실제 백엔드 응답 구조와 동일
-        const getMockStatus = (pollCount: number) => {
-          // 0% 확률로 failed 상태 반환 (실패 안함)
-          const random = Math.random();
-          if (random < 0.0) {
-            return {
-              sessionId: sessionId,
-              status: 'failed',
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-              expiresAt: new Date(Date.now() + 3600000).toISOString(),
-              error: 'AI 레시피 생성 중 오류가 발생했습니다.'
-            };
-          }
-          
-          if (pollCount <= 3) {
-            return {
-              sessionId: sessionId,
-              status: 'processing',
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-              expiresAt: new Date(Date.now() + 3600000).toISOString()
-            };
-          } else {
-            return {
-              sessionId: sessionId,
-              status: 'completed',
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-              expiresAt: new Date(Date.now() + 3600000).toISOString()
-            };
-          }
-        };
-
-        const responseData = getMockStatus(pollCount);
-        console.log(`📊 Mock Status response:`, responseData);
+        // 실제 API 호출
+        const statusUrl = `${API_CONFIG.BASE_URL}/sessions/${sessionId}/status`;
+        console.log('🌐 Status URL:', statusUrl);
+        const statusResponse = await fetch(statusUrl);
+        const responseData = await statusResponse.json();
+        console.log(`📊 Status response:`, responseData);
         const { status, error } = responseData;
 
         const progressInfo = getProgressInfo(status);
@@ -119,48 +83,9 @@ export default function ChatScreen() {
         if (status === 'completed') {
           clearInterval(pollInterval);
           
-          // 실제 결과 조회 API (주석 처리)
-          // const resultResponse = await fetch(`${API_CONFIG.BASE_URL}/sessions/${sessionId}/result`);
-          // const recipeResult = await resultResponse.json();
-          
-          // Mock 결과 데이터 - 실제 백엔드 응답 구조와 동일
-          const recipeResult = {
-            success: true,
-            status: 'completed',
-            sessionId: sessionId,
-            result: {
-              sessionId: sessionId,
-              recipe: {
-                name: "버터 새우 아보카도 샐러드",
-                ingredients: [
-                  { name: "새우", amount: "200g", price: 8900 },
-                  { name: "아보카도", amount: "1개", price: 3500 },
-                  { name: "버터", amount: "2큰술", price: 1200 },
-                  { name: "레몬", amount: "1/2개", price: 800 }
-                ],
-                instructions: [
-                  "새우를 깨끗이 씻어 준비합니다.",
-                  "아보카도를 반으로 잘라 씨를 제거하고 적당한 크기로 자릅니다.",
-                  "팬에 버터를 두르고 새우를 볶아줍니다.",
-                  "볶은 새우와 아보카도를 섞고 레몬즙을 뿌려 완성합니다."
-                ],
-                cookingTime: "15분",
-                difficulty: "easy",
-                servings: 2
-              },
-              nutrition: {
-                calories: 420,
-                protein: 25,
-                carbs: 8,
-                fat: 35
-              },
-              pricing: {
-                totalEstimatedCost: 12300
-              }
-            },
-            completedAt: new Date().toISOString(),
-            processingTime: 45
-          };
+          // 실제 결과 조회 API
+          const resultResponse = await fetch(`${API_CONFIG.BASE_URL}/sessions/${sessionId}/result`);
+          const recipeResult = await resultResponse.json();
           
           // 결과 캐싱
           localStorage.setItem(`recipe_${sessionId}`, JSON.stringify(recipeResult));
