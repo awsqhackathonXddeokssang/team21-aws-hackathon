@@ -225,80 +225,214 @@ export default function ChatScreen() {
 
   const generateRecipe = async () => {
     try {
-      // 하드코딩된 테스트 데이터 (나중에 MockApiService로 교체)
-      const hardcodedRecipe = {
-        id: 'keto-shrimp-avocado',
-        name: '케토 새우 아보카도 볶음',
-        description: '저탄수화물 고지방 케톤 다이어트에 완벽한 새우 아보카도 요리입니다. 신선한 새우와 크리미한 아보카도의 조화가 일품입니다.',
-        cookingTime: '15분',
-        calories: 420,
-        steps: [
-          '새우는 껍질을 벗기고 내장을 제거한 후 깨끗이 씻어주세요',
-          '아보카도는 반으로 갈라 씨를 제거하고 한 입 크기로 썰어주세요',
-          '팬에 버터를 두르고 중불에서 녹여주세요',
-          '새우를 넣고 2-3분간 볶아 색이 변하면 뒤집어주세요',
-          '아보카도를 넣고 1분간 가볍게 볶아주세요',
-          '올리브오일을 뿌리고 소금, 후추로 간을 맞춰 완성해주세요'
-        ],
-        ingredients: [
-          {
-            name: '새우',
-            amount: '200g',
-            prices: [
-              { vendor: '이마트', price: 8900 },
-              { vendor: '쿠팡', price: 7500 },
-              { vendor: '마켓컬리', price: 8200 }
-            ]
-          },
-          {
-            name: '아보카도',
-            amount: '1개',
-            prices: [
-              { vendor: '이마트', price: 2500 },
-              { vendor: '쿠팡', price: 2200 },
-              { vendor: '마켓컬리', price: 2800 }
-            ]
-          },
-          {
-            name: '버터',
-            amount: '20g',
-            prices: [
-              { vendor: '이마트', price: 4500 },
-              { vendor: '쿠팡', price: 3900 },
-              { vendor: '마켓컬리', price: 4200 }
-            ]
-          },
-          {
-            name: '올리브오일',
-            amount: '1큰술',
-            prices: [
-              { vendor: '이마트', price: 6800 },
-              { vendor: '쿠팡', price: 5900 },
-              { vendor: '마켓컬리', price: 7200 }
-            ]
-          },
-          {
-            name: '소금',
-            amount: '약간',
-            prices: [
-              { vendor: '이마트', price: 1200 },
-              { vendor: '쿠팡', price: 1000 },
-              { vendor: '마켓컬리', price: 1500 }
-            ]
-          }
-        ],
-        nutrition: {
-          calories: 420,
-          carbs: 8,
-          protein: 25,
-          fat: 35,
-          carbsPercent: 7,
-          proteinPercent: 23,
-          fatPercent: 70
-        }
-      };
+      // 타겟별 하드코딩된 테스트 데이터
+      let hardcodedRecipe;
+      
+      switch (selectedTarget) {
+        case 'baby':
+          hardcodedRecipe = {
+            id: 'baby-chicken-pumpkin',
+            name: '닭가슴살 단호박 이유식',
+            description: '9-12개월 아기를 위한 영양만점 이유식입니다. 부드럽고 소화하기 쉬운 재료로 만든 건강한 한 끼입니다.',
+            cookingTime: '20분',
+            calories: 180,
+            steps: [
+              '닭가슴살은 깨끗이 씻어 한 입 크기로 썰어주세요',
+              '단호박은 껍질을 벗기고 작게 썰어주세요',
+              '브로콜리는 꽃송이만 떼어 작게 썰어주세요',
+              '물을 끓인 후 닭가슴살을 넣고 10분간 삶아주세요',
+              '단호박과 브로콜리를 넣고 5분 더 삶아주세요',
+              '모든 재료를 으깨서 아기가 먹기 좋은 크기로 만들어주세요'
+            ],
+            ingredients: [
+              {
+                name: '닭가슴살',
+                amount: '50g',
+                prices: [
+                  { vendor: '이마트', price: 3500 },
+                  { vendor: '쿠팡', price: 3200 },
+                  { vendor: '마켓컬리', price: 3800 }
+                ]
+              },
+              {
+                name: '단호박',
+                amount: '100g',
+                prices: [
+                  { vendor: '이마트', price: 2000 },
+                  { vendor: '쿠팡', price: 1800 },
+                  { vendor: '마켓컬리', price: 2200 }
+                ]
+              },
+              {
+                name: '브로콜리',
+                amount: '30g',
+                prices: [
+                  { vendor: '이마트', price: 1500 },
+                  { vendor: '쿠팡', price: 1300 },
+                  { vendor: '마켓컬리', price: 1700 }
+                ]
+              }
+            ],
+            nutrition: {
+              calories: 180,
+              carbs: 15,
+              protein: 18,
+              fat: 3,
+              carbsPercent: 33,
+              proteinPercent: 40,
+              fatPercent: 15
+            }
+          };
+          break;
+          
+        case 'diabetes':
+          hardcodedRecipe = {
+            id: 'diabetes-brown-rice-vegetables',
+            name: '현미 채소볶음',
+            description: '혈당 관리에 도움되는 저GI 현미와 신선한 채소로 만든 건강한 볶음밥입니다.',
+            cookingTime: '25분',
+            calories: 320,
+            steps: [
+              '현미는 미리 불려서 밥을 지어주세요',
+              '브로콜리와 당근은 한 입 크기로 썰어주세요',
+              '팬에 올리브오일을 두르고 당근을 먼저 볶아주세요',
+              '브로콜리를 넣고 2분간 더 볶아주세요',
+              '현미밥을 넣고 골고루 섞어가며 볶아주세요',
+              '소금과 후추로 간을 맞춰 완성해주세요'
+            ],
+            ingredients: [
+              {
+                name: '현미',
+                amount: '1컵',
+                prices: [
+                  { vendor: '이마트', price: 4500 },
+                  { vendor: '쿠팡', price: 4200 },
+                  { vendor: '마켓컬리', price: 4800 }
+                ]
+              },
+              {
+                name: '브로콜리',
+                amount: '100g',
+                prices: [
+                  { vendor: '이마트', price: 2500 },
+                  { vendor: '쿠팡', price: 2200 },
+                  { vendor: '마켓컬리', price: 2800 }
+                ]
+              },
+              {
+                name: '당근',
+                amount: '1개',
+                prices: [
+                  { vendor: '이마트', price: 1200 },
+                  { vendor: '쿠팡', price: 1000 },
+                  { vendor: '마켓컬리', price: 1400 }
+                ]
+              },
+              {
+                name: '올리브오일',
+                amount: '1큰술',
+                prices: [
+                  { vendor: '이마트', price: 6800 },
+                  { vendor: '쿠팡', price: 5900 },
+                  { vendor: '마켓컬리', price: 7200 }
+                ]
+              }
+            ],
+            nutrition: {
+              calories: 320,
+              carbs: 45,
+              protein: 12,
+              fat: 8,
+              carbsPercent: 56,
+              proteinPercent: 15,
+              fatPercent: 23
+            }
+          };
+          break;
+          
+        default: // keto
+          hardcodedRecipe = {
+            id: 'keto-shrimp-avocado',
+            name: '케토 새우 아보카도 볶음',
+            description: '저탄수화물 고지방 케톤 다이어트에 완벽한 새우 아보카도 요리입니다. 신선한 새우와 크리미한 아보카도의 조화가 일품입니다.',
+            cookingTime: '15분',
+            calories: 420,
+            steps: [
+              '새우는 껍질을 벗기고 내장을 제거한 후 깨끗이 씻어주세요',
+              '아보카도는 반으로 갈라 씨를 제거하고 한 입 크기로 썰어주세요',
+              '팬에 버터를 두르고 중불에서 녹여주세요',
+              '새우를 넣고 2-3분간 볶아 색이 변하면 뒤집어주세요',
+              '아보카도를 넣고 1분간 가볍게 볶아주세요',
+              '올리브오일을 뿌리고 소금, 후추로 간을 맞춰 완성해주세요'
+            ],
+            ingredients: [
+              {
+                name: '새우',
+                amount: '200g',
+                prices: [
+                  { vendor: '이마트', price: 8900 },
+                  { vendor: '쿠팡', price: 7500 },
+                  { vendor: '마켓컬리', price: 8200 }
+                ]
+              },
+              {
+                name: '아보카도',
+                amount: '1개',
+                prices: [
+                  { vendor: '이마트', price: 2500 },
+                  { vendor: '쿠팡', price: 2200 },
+                  { vendor: '마켓컬리', price: 2800 }
+                ]
+              },
+              {
+                name: '버터',
+                amount: '20g',
+                prices: [
+                  { vendor: '이마트', price: 4500 },
+                  { vendor: '쿠팡', price: 3900 },
+                  { vendor: '마켓컬리', price: 4200 }
+                ]
+              },
+              {
+                name: '올리브오일',
+                amount: '1큰술',
+                prices: [
+                  { vendor: '이마트', price: 6800 },
+                  { vendor: '쿠팡', price: 5900 },
+                  { vendor: '마켓컬리', price: 7200 }
+                ]
+              },
+              {
+                name: '소금',
+                amount: '약간',
+                prices: [
+                  { vendor: '이마트', price: 1200 },
+                  { vendor: '쿠팡', price: 1000 },
+                  { vendor: '마켓컬리', price: 1500 }
+                ]
+              }
+            ],
+            nutrition: {
+              calories: 420,
+              carbs: 8,
+              protein: 25,
+              fat: 35,
+              carbsPercent: 7,
+              proteinPercent: 23,
+              fatPercent: 70
+            }
+          };
+      }
 
       setCurrentRecipe(hardcodedRecipe);
+      
+      // 모든 재료를 기본적으로 체크된 상태로 설정
+      const initialCheckedItems = {};
+      hardcodedRecipe.ingredients.forEach(ingredient => {
+        initialCheckedItems[ingredient.name] = true;
+      });
+      setCheckedItems(initialCheckedItems);
+      
       setShowResult(true);
       setIsLoading(false);
     } catch (error) {
@@ -438,80 +572,214 @@ export default function ChatScreen() {
       setShowResult(true);
       
       setTimeout(async () => {
-        // 하드코딩된 테스트 데이터 사용
-        const hardcodedRecipe = {
-          id: 'keto-shrimp-avocado',
-          name: '케토 새우 아보카도 볶음',
-          description: '저탄수화물 고지방 케톤 다이어트에 완벽한 새우 아보카도 요리입니다. 신선한 새우와 크리미한 아보카도의 조화가 일품입니다.',
-          cookingTime: '15분',
-          calories: 420,
-          steps: [
-            '새우는 껍질을 벗기고 내장을 제거한 후 깨끗이 씻어주세요',
-            '아보카도는 반으로 갈라 씨를 제거하고 한 입 크기로 썰어주세요',
-            '팬에 버터를 두르고 중불에서 녹여주세요',
-            '새우를 넣고 2-3분간 볶아 색이 변하면 뒤집어주세요',
-            '아보카도를 넣고 1분간 가볍게 볶아주세요',
-            '올리브오일을 뿌리고 소금, 후추로 간을 맞춰 완성해주세요'
-          ],
-          ingredients: [
-            {
-              name: '새우',
-              amount: '200g',
-              prices: [
-                { vendor: '이마트', price: 8900 },
-                { vendor: '쿠팡', price: 7500 },
-                { vendor: '마켓컬리', price: 8200 }
-              ]
-            },
-            {
-              name: '아보카도',
-              amount: '1개',
-              prices: [
-                { vendor: '이마트', price: 2500 },
-                { vendor: '쿠팡', price: 2200 },
-                { vendor: '마켓컬리', price: 2800 }
-              ]
-            },
-            {
-              name: '버터',
-              amount: '20g',
-              prices: [
-                { vendor: '이마트', price: 4500 },
-                { vendor: '쿠팡', price: 3900 },
-                { vendor: '마켓컬리', price: 4200 }
-              ]
-            },
-            {
-              name: '올리브오일',
-              amount: '1큰술',
-              prices: [
-                { vendor: '이마트', price: 6800 },
-                { vendor: '쿠팡', price: 5900 },
-                { vendor: '마켓컬리', price: 7200 }
-              ]
-            },
-            {
-              name: '소금',
-              amount: '약간',
-              prices: [
-                { vendor: '이마트', price: 1200 },
-                { vendor: '쿠팡', price: 1000 },
-                { vendor: '마켓컬리', price: 1500 }
-              ]
-            }
-          ],
-          nutrition: {
-            calories: 420,
-            carbs: 8,
-            protein: 25,
-            fat: 35,
-            carbsPercent: 7,
-            proteinPercent: 23,
-            fatPercent: 70
-          }
-        };
+        // 타겟별 하드코딩된 테스트 데이터
+        let hardcodedRecipe;
+        
+        switch (selectedTarget) {
+          case 'baby':
+            hardcodedRecipe = {
+              id: 'baby-chicken-pumpkin',
+              name: '닭가슴살 단호박 이유식',
+              description: '9-12개월 아기를 위한 영양만점 이유식입니다. 부드럽고 소화하기 쉬운 재료로 만든 건강한 한 끼입니다.',
+              cookingTime: '20분',
+              calories: 180,
+              steps: [
+                '닭가슴살은 깨끗이 씻어 한 입 크기로 썰어주세요',
+                '단호박은 껍질을 벗기고 작게 썰어주세요',
+                '브로콜리는 꽃송이만 떼어 작게 썰어주세요',
+                '물을 끓인 후 닭가슴살을 넣고 10분간 삶아주세요',
+                '단호박과 브로콜리를 넣고 5분 더 삶아주세요',
+                '모든 재료를 으깨서 아기가 먹기 좋은 크기로 만들어주세요'
+              ],
+              ingredients: [
+                {
+                  name: '닭가슴살',
+                  amount: '50g',
+                  prices: [
+                    { vendor: '이마트', price: 3500 },
+                    { vendor: '쿠팡', price: 3200 },
+                    { vendor: '마켓컬리', price: 3800 }
+                  ]
+                },
+                {
+                  name: '단호박',
+                  amount: '100g',
+                  prices: [
+                    { vendor: '이마트', price: 2000 },
+                    { vendor: '쿠팡', price: 1800 },
+                    { vendor: '마켓컬리', price: 2200 }
+                  ]
+                },
+                {
+                  name: '브로콜리',
+                  amount: '30g',
+                  prices: [
+                    { vendor: '이마트', price: 1500 },
+                    { vendor: '쿠팡', price: 1300 },
+                    { vendor: '마켓컬리', price: 1700 }
+                  ]
+                }
+              ],
+              nutrition: {
+                calories: 180,
+                carbs: 15,
+                protein: 18,
+                fat: 3,
+                carbsPercent: 33,
+                proteinPercent: 40,
+                fatPercent: 15
+              }
+            };
+            break;
+            
+          case 'diabetes':
+            hardcodedRecipe = {
+              id: 'diabetes-brown-rice-vegetables',
+              name: '현미 채소볶음',
+              description: '혈당 관리에 도움되는 저GI 현미와 신선한 채소로 만든 건강한 볶음밥입니다.',
+              cookingTime: '25분',
+              calories: 320,
+              steps: [
+                '현미는 미리 불려서 밥을 지어주세요',
+                '브로콜리와 당근은 한 입 크기로 썰어주세요',
+                '팬에 올리브오일을 두르고 당근을 먼저 볶아주세요',
+                '브로콜리를 넣고 2분간 더 볶아주세요',
+                '현미밥을 넣고 골고루 섞어가며 볶아주세요',
+                '소금과 후추로 간을 맞춰 완성해주세요'
+              ],
+              ingredients: [
+                {
+                  name: '현미',
+                  amount: '1컵',
+                  prices: [
+                    { vendor: '이마트', price: 4500 },
+                    { vendor: '쿠팡', price: 4200 },
+                    { vendor: '마켓컬리', price: 4800 }
+                  ]
+                },
+                {
+                  name: '브로콜리',
+                  amount: '100g',
+                  prices: [
+                    { vendor: '이마트', price: 2500 },
+                    { vendor: '쿠팡', price: 2200 },
+                    { vendor: '마켓컬리', price: 2800 }
+                  ]
+                },
+                {
+                  name: '당근',
+                  amount: '1개',
+                  prices: [
+                    { vendor: '이마트', price: 1200 },
+                    { vendor: '쿠팡', price: 1000 },
+                    { vendor: '마켓컬리', price: 1400 }
+                  ]
+                },
+                {
+                  name: '올리브오일',
+                  amount: '1큰술',
+                  prices: [
+                    { vendor: '이마트', price: 6800 },
+                    { vendor: '쿠팡', price: 5900 },
+                    { vendor: '마켓컬리', price: 7200 }
+                  ]
+                }
+              ],
+              nutrition: {
+                calories: 320,
+                carbs: 45,
+                protein: 12,
+                fat: 8,
+                carbsPercent: 56,
+                proteinPercent: 15,
+                fatPercent: 23
+              }
+            };
+            break;
+            
+          default: // keto
+            hardcodedRecipe = {
+              id: 'keto-shrimp-avocado',
+              name: '케토 새우 아보카도 볶음',
+              description: '저탄수화물 고지방 케톤 다이어트에 완벽한 새우 아보카도 요리입니다. 신선한 새우와 크리미한 아보카도의 조화가 일품입니다.',
+              cookingTime: '15분',
+              calories: 420,
+              steps: [
+                '새우는 껍질을 벗기고 내장을 제거한 후 깨끗이 씻어주세요',
+                '아보카도는 반으로 갈라 씨를 제거하고 한 입 크기로 썰어주세요',
+                '팬에 버터를 두르고 중불에서 녹여주세요',
+                '새우를 넣고 2-3분간 볶아 색이 변하면 뒤집어주세요',
+                '아보카도를 넣고 1분간 가볍게 볶아주세요',
+                '올리브오일을 뿌리고 소금, 후추로 간을 맞춰 완성해주세요'
+              ],
+              ingredients: [
+                {
+                  name: '새우',
+                  amount: '200g',
+                  prices: [
+                    { vendor: '이마트', price: 8900 },
+                    { vendor: '쿠팡', price: 7500 },
+                    { vendor: '마켓컬리', price: 8200 }
+                  ]
+                },
+                {
+                  name: '아보카도',
+                  amount: '1개',
+                  prices: [
+                    { vendor: '이마트', price: 2500 },
+                    { vendor: '쿠팡', price: 2200 },
+                    { vendor: '마켓컬리', price: 2800 }
+                  ]
+                },
+                {
+                  name: '버터',
+                  amount: '20g',
+                  prices: [
+                    { vendor: '이마트', price: 4500 },
+                    { vendor: '쿠팡', price: 3900 },
+                    { vendor: '마켓컬리', price: 4200 }
+                  ]
+                },
+                {
+                  name: '올리브오일',
+                  amount: '1큰술',
+                  prices: [
+                    { vendor: '이마트', price: 6800 },
+                    { vendor: '쿠팡', price: 5900 },
+                    { vendor: '마켓컬리', price: 7200 }
+                  ]
+                },
+                {
+                  name: '소금',
+                  amount: '약간',
+                  prices: [
+                    { vendor: '이마트', price: 1200 },
+                    { vendor: '쿠팡', price: 1000 },
+                    { vendor: '마켓컬리', price: 1500 }
+                  ]
+                }
+              ],
+              nutrition: {
+                calories: 420,
+                carbs: 8,
+                protein: 25,
+                fat: 35,
+                carbsPercent: 7,
+                proteinPercent: 23,
+                fatPercent: 70
+              }
+            };
+        }
         
         setCurrentRecipe(hardcodedRecipe);
+        
+        // 모든 재료를 기본적으로 체크된 상태로 설정
+        const initialCheckedItems = {};
+        hardcodedRecipe.ingredients.forEach(ingredient => {
+          initialCheckedItems[ingredient.name] = true;
+        });
+        setCheckedItems(initialCheckedItems);
+        
         setIsLoading(false);
       }, 5000); // 5초 로딩 시뮬레이션
       
