@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 export default function NotFound() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -7,12 +9,12 @@ export default function NotFound() {
         <p className="text-sm text-gray-500 mt-2">
           현재 시간: {new Date().toLocaleString('ko-KR')}
         </p>
-        <a 
+        <Link 
           href="/" 
           className="mt-6 inline-block px-6 py-3 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600"
         >
           홈으로 돌아가기
-        </a>
+        </Link>
       </div>
     </div>
   );
