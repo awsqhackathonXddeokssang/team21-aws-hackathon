@@ -11,7 +11,8 @@
 - **기능**: 네이버 쇼핑 API 연동, 가격 조회 및 정렬
 - **배포**: 프로덕션 환경 배포 완료
 - **테스트**: 실제 API 테스트 완료
-- **최종 배포**: 2025-09-05 07:20:40 UTC
+- **최종 배포**: 2025-09-05 09:28:18 UTC
+- **📋 API 명세**: [PRICE_LAMBDA_API_SPEC.md](backend-specs/lambda/PRICE_LAMBDA_API_SPEC.md)
 
 **주요 기능:**
 - 네이버 쇼핑 API 연동
