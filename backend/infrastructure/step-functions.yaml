@@ -1,11 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'AI Chef Step Functions - Simplified Lambda-managed DynamoDB'
 
-Parameters:
-  Environment:
-    Type: String
-    Default: dev
-
 Resources:
   # Step Functions Execution Role
   StepFunctionsRole:
@@ -32,7 +27,7 @@ Resources:
   RecipeWorkflowStateMachine:
     Type: AWS::StepFunctions::StateMachine
     Properties:
-      StateMachineName: !Sub 'ai-chef-workflow-${Environment}'
+      StateMachineName: 'ai-chef-workflow'
       RoleArn: !GetAtt StepFunctionsRole.Arn
       DefinitionString: |
         {
@@ -43,7 +38,7 @@ Resources:
               "Type": "Task",
               "Resource": "arn:aws:states:::lambda:invoke",
               "Parameters": {
-                "FunctionName": "ai-chef-orchestrator-dev",
+                "FunctionName": "ai-chef-orchestrator",
                 "Payload.$": "$"
               },
               "ResultPath": "$.sessionResult",
@@ -53,7 +48,7 @@ Resources:
               "Type": "Task",
               "Resource": "arn:aws:states:::lambda:invoke",
               "Parameters": {
-                "FunctionName": "ai-chef-recipe-dev",
+                "FunctionName": "ai-chef-recipe",
                 "Payload.$": "$"
               },
               "ResultSelector": {
@@ -74,7 +69,7 @@ Resources:
               "Type": "Task",
               "Resource": "arn:aws:states:::lambda:invoke",
               "Parameters": {
-                "FunctionName": "ai-chef-price-dev",
+                "FunctionName": "ai-chef-price",
                 "Payload": {
                   "sessionId.$": "$.sessionId",
                   "profile.$": "$.profile",
@@ -99,7 +94,7 @@ Resources:
               "Type": "Task",
               "Resource": "arn:aws:states:::lambda:invoke",
               "Parameters": {
-                "FunctionName": "ai-chef-combine-dev",
+                "FunctionName": "ai-chef-combine",
                 "Payload": {
                   "sessionId.$": "$.sessionId",
                   "profile.$": "$.profile",

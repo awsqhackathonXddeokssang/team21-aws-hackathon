@@ -1,11 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'AI Chef Recipe Lambda with Claude Opus 4.1'
 
-Parameters:
-  Environment:
-    Type: String
-    Default: dev
-
 Resources:
   # Lambda Execution Role
   RecipeLambdaRole:
@@ -34,7 +29,7 @@ Resources:
   RecipeLambda:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub 'ai-chef-recipe-${Environment}'
+      FunctionName: 'ai-chef-recipe'
       Runtime: python3.11
       Handler: lambda_function.lambda_handler
       Role: !GetAtt RecipeLambdaRole.Arn

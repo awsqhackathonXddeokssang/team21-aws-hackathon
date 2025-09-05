@@ -1,17 +1,12 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'AI Chef API Gateway for Session Processing'
 
-Parameters:
-  Environment:
-    Type: String
-    Default: dev
-
 Resources:
   # API Gateway
   ApiGateway:
     Type: AWS::ApiGateway::RestApi
     Properties:
-      Name: !Sub 'ai-chef-api-${Environment}'
+      Name: 'ai-chef-api'
       Description: 'AI Chef Session Processing API'
       EndpointConfiguration:
         Types:
@@ -52,7 +47,7 @@ Resources:
       Integration:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
-        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:ai-chef-session-${Environment}/invocations'
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:ai-chef-session/invocations'
 
   # OPTIONS Method for CORS
   ProcessOptionsMethod:
@@ -83,7 +78,7 @@ Resources:
   LambdaApiGatewayPermission:
     Type: AWS::Lambda::Permission
     Properties:
-      FunctionName: !Sub 'ai-chef-session-${Environment}'
+      FunctionName: 'ai-chef-session'
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/POST/session/*/process'
@@ -96,12 +91,12 @@ Resources:
       - ProcessOptionsMethod
     Properties:
       RestApiId: !Ref ApiGateway
-      StageName: !Ref Environment
+      StageName: prod
 
 Outputs:
   ApiGatewayUrl:
     Description: 'API Gateway URL'
-    Value: !Sub 'https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+    Value: !Sub 'https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod'
     Export:
       Name: !Sub '${AWS::StackName}-ApiGatewayUrl'
       
