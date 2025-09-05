@@ -229,7 +229,7 @@ Resources:
       Integration:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
-        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SessionLambda.Arn}/invocations'
+        Uri: 'arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:491085385364:function:ai-chef-session-create/invocations'
       MethodResponses:
         - StatusCode: 200
           ResponseParameters:
@@ -246,7 +246,7 @@ Resources:
       Integration:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
-        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SessionLambda.Arn}/invocations'
+        Uri: 'arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:491085385364:function:ai-chef-session-create/invocations'
       MethodResponses:
         - StatusCode: 200
           ResponseParameters:
@@ -427,7 +427,7 @@ Resources:
   LambdaApiGatewaySessionsPermission:
     Type: AWS::Lambda::Permission
     Properties:
-      FunctionName: !Ref SessionLambda
+      FunctionName: 'arn:aws:lambda:us-east-1:491085385364:function:ai-chef-session-create'
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/GET/sessions'
@@ -436,7 +436,7 @@ Resources:
   LambdaApiGatewaySessionsPostPermission:
     Type: AWS::Lambda::Permission
     Properties:
-      FunctionName: !Ref SessionLambda
+      FunctionName: 'arn:aws:lambda:us-east-1:491085385364:function:ai-chef-session-create'
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/POST/sessions'
