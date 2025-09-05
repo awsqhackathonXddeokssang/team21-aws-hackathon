@@ -26,10 +26,34 @@ export default function ChatScreen() {
 
   // 세션 초기화
   useEffect(() => {
-    // 세션 생성 (실제로는 서버 호출 필요)
-    const newSessionId = `sess-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    setSessionId(newSessionId);
-    localStorage.setItem('sessionId', newSessionId);
+    const initializeSession = async () => {
+      try {
+        // 기존 세션 확인
+        const savedSessionId = localStorage.getItem('sessionId');
+        const sessionExpiry = localStorage.getItem('sessionExpiry');
+        
+        if (savedSessionId && sessionExpiry && new Date(sessionExpiry) > new Date()) {
+          // 유효한 세션 존재
+          setSessionId(savedSessionId);
+          console.log('Existing session restored:', savedSessionId);
+        } else {
+          // 새 세션 생성
+          const sessionData = await MockApiService.startSession();
+          setSessionId(sessionData.sessionId);
+          localStorage.setItem('sessionId', sessionData.sessionId);
+          localStorage.setItem('sessionExpiry', sessionData.expiresAt);
+          console.log('New session created:', sessionData.sessionId);
+        }
+      } catch (error) {
+        console.error('세션 초기화 실패:', error);
+        // Fallback: 임시 세션 ID 생성
+        const fallbackId = `temp-${Date.now()}`;
+        setSessionId(fallbackId);
+        console.log('Fallback session created:', fallbackId);
+      }
+    };
+    
+    initializeSession();
   }, []);
 
   // 초기 AI 메시지들
@@ -202,48 +226,46 @@ export default function ChatScreen() {
     setIsLoading(true);
 
     try {
-      // TODO: 실제 서버 통신으로 교체 필요
-      // const response = await fetch('/api/session/update', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({
-      //     sessionId,
-      //     messages: messages.map(m => ({ role: m.type, content: m.content })),
-      //     newMessage: inputText,
-      //     profile: {
-      //       target: selectedTarget,
-      //       additionalQuestions
-      //     }
-      //   })
-      // });
-      // const data = await response.json();
+      // 현재 프로필 정보 구성
+      const profileData = {
+        target: selectedTarget,
+        servings: messages.find(m => m.content?.includes('인분'))?.content || '2인분',
+        cookingTime: messages.find(m => m.content?.includes('분'))?.content || '30분',
+        additionalQuestions
+      };
 
-      // Mock 응답 (실제로는 서버에서 Bedrock 응답)
-      setTimeout(() => {
-        const aiResponse: ChatMessage = {
-          id: `ai-response-${Date.now()}`,
-          type: 'ai',
-          content: getContextualResponse(inputText), // 입력에 따른 맞춤 응답
-          timestamp: new Date()
-        };
+      // Mock Bedrock API 호출 (sessionId 포함)
+      const response = await MockApiService.processAdditionalQuestion(
+        inputText, 
+        sessionId, 
+        profileData
+      );
 
-        // 다시 추가 질문 물어보기
-        const nextQuestion: ChatMessage = {
-          id: `ai-additional-${Date.now()}`,
-          type: 'ai',
-          content: '또 다른 질문이나 요청사항이 있으신가요?',
-          timestamp: new Date(),
-          messageType: 'choice',
-          options: ['네, 질문이 있어요', '아니요, 충분해요'] // 옵션 통일
-        };
+      // AI 응답 메시지 추가
+      const aiResponse: ChatMessage = {
+        id: `ai-response-${Date.now()}`,
+        type: 'ai',
+        content: response.response,
+        timestamp: new Date()
+      };
 
-        setMessages(prev => [...prev, aiResponse, nextQuestion]);
-        setIsLoading(false);
-      }, 1000);
-    } catch (error) {
-      console.error('Error communicating with server:', error);
+      // 다시 추가 질문 물어보기
+      const nextQuestion: ChatMessage = {
+        id: `ai-additional-${Date.now()}`,
+        type: 'ai',
+        content: '또 다른 질문이나 요청사항이 있으신가요?',
+        timestamp: new Date(),
+        messageType: 'choice',
+        options: ['네, 더 있어요', '아니요, 이제 충분해요']
+      };
+
+      setMessages(prev => [...prev, aiResponse, nextQuestion]);
       setIsLoading(false);
-      // 에러 메시지 추가
+    } catch (error) {
+      console.error('추가 질문 처리 오류:', error);
+      setIsLoading(false);
+      
+      // 에러 시 fallback 응답
       const errorMessage: ChatMessage = {
         id: `ai-error-${Date.now()}`,
         type: 'ai',
