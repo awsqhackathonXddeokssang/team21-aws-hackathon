@@ -1,0 +1,202 @@
+openapi: 3.0.0
+info:
+  title: Recipe Nutrition API
+  description: 레시피 재료의 영양소 정보를 제공하는 API
+  version: 1.0.0
+  
+servers:
+  - url: https://api.example.com/v1
+    description: Production server
+
+paths:
+  /recipe/nutrition:
+    post:
+      summary: 레시피 재료 영양소 조회
+      description: 레시피의 재료 목록을 받아 각 재료의 영양소 정보와 총합을 반환
+      operationId: getRecipeNutrition
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - ingredients
+              properties:
+                ingredients:
+                  type: array
+                  description: 재료 목록 (양 포함)
+                  items:
+                    type: string
+                  example: ["닭가슴살 200g", "브로콜리 100g", "현미밥 150g"]
+                user_profile:
+                  type: object
+                  description: 사용자 프로필 정보
+                  properties:
+                    goal:
+                      type: string
+                      description: 건강 목표
+                      example: "체중 감량"
+                    restrictions:
+                      type: array
+                      description: 식단 제한사항
+                      items:
+                        type: string
+                      example: ["글루텐 프리", "저나트륨"]
+                include_analysis:
+                  type: boolean
+                  description: AI 영양소 분석 포함 여부
+                  default: false
+      responses:
+        '200':
+          description: 성공적으로 영양소 정보를 조회함
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_nutrition:
+                    $ref: '#/components/schemas/TotalNutrition'
+                  ingredient_details:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/IngredientNutrition'
+                  ai_analysis:
+                    type: string
+                    description: AI 영양소 분석 (include_analysis=true인 경우)
+        '400':
+          description: 잘못된 요청
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: 서버 오류
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    
+    options:
+      summary: CORS preflight
+      description: CORS preflight 요청 처리
+      responses:
+        '200':
+          description: CORS preflight 응답
+          headers:
+            Access-Control-Allow-Origin:
+              schema:
+                type: string
+            Access-Control-Allow-Methods:
+              schema:
+                type: string
+            Access-Control-Allow-Headers:
+              schema:
+                type: string
+
+  /health:
+    get:
+      summary: 헬스 체크
+      description: API 서버 상태 확인
+      responses:
+        '200':
+          description: 서버 정상 상태
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "healthy"
+                  timestamp:
+                    type: string
+                    format: date-time
+
+components:
+  schemas:
+    TotalNutrition:
+      type: object
+      description: 총 영양소 정보
+      properties:
+        total_calories:
+          type: number
+          format: float
+          description: 총 칼로리 (kcal)
+          example: 445.0
+        total_protein:
+          type: number
+          format: float
+          description: 총 단백질 (g)
+          example: 45.2
+        total_fat:
+          type: number
+          format: float
+          description: 총 지방 (g)
+          example: 8.1
+        total_carbs:
+          type: number
+          format: float
+          description: 총 탄수화물 (g)
+          example: 35.7
+        total_fiber:
+          type: number
+          format: float
+          description: 총 식이섬유 (g)
+          example: 5.2
+        total_sodium:
+          type: number
+          format: float
+          description: 총 나트륨 (mg)
+          example: 320.5
+    
+    IngredientNutrition:
+      type: object
+      description: 개별 재료 영양소 정보
+      properties:
+        ingredient:
+          type: string
+          description: 재료명과 양
+          example: "닭가슴살 200g"
+        calories:
+          type: number
+          format: float
+          description: 칼로리 (kcal)
+          example: 330.0
+        protein:
+          type: number
+          format: float
+          description: 단백질 (g)
+          example: 62.0
+        fat:
+          type: number
+          format: float
+          description: 지방 (g)
+          example: 7.2
+        carbs:
+          type: number
+          format: float
+          description: 탄수화물 (g)
+          example: 0.0
+        fiber:
+          type: number
+          format: float
+          description: 식이섬유 (g)
+          example: 0.0
+        sodium:
+          type: number
+          format: float
+          description: 나트륨 (mg)
+          example: 148.0
+        error:
+          type: string
+          description: 오류 메시지 (영양소 정보를 찾을 수 없는 경우)
+    
+    Error:
+      type: object
+      description: 오류 응답
+      properties:
+        error:
+          type: string
+          description: 오류 메시지
+          example: "ingredients 필드가 필요합니다"
