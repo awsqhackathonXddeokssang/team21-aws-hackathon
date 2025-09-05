@@ -150,6 +150,7 @@ export default function ChatScreen() {
           // 제출하기 단계로
           setConversationPhase('complete');
           handleSubmitProfile();
+          return;  // setIsLoading(false) 실행 방지
         } else if (currentStep === 2) {
           // Step 2에서 일반 옵션 선택 시 추가 질문 보여주기
           const additionalQuestionMessage: ChatMessage = {
