@@ -14,8 +14,10 @@ export default function ChatScreen() {
   const [currentRecipe, setCurrentRecipe] = useState<Recipe | null>(null);
   const [showResult, setShowResult] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
-  const [showTargetSelection, setShowTargetSelection] = useState(true);
-  const [currentOptions, setCurrentOptions] = useState<string[]>([]);
+
+  // 마지막 메시지 기반 선택지 표시 로직
+  const lastMessage = messages[messages.length - 1];
+  const shouldShowOptions = lastMessage?.messageType === 'choice' && lastMessage?.options;
 
   // 초기 AI 메시지들
   useEffect(() => {
