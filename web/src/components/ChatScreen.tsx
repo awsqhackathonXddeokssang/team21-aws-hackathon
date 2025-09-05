@@ -143,6 +143,18 @@ export default function ChatScreen() {
 
   return (
     <div className="h-full bg-white flex flex-col">
+      {/* 헤더 추가 */}
+      <div className="flex items-center p-4 bg-white border-b border-gray-100">
+        <div className="w-10 h-10 bg-orange-500 rounded-full flex items-center justify-center">
+          <span className="text-white text-lg">👨🍳</span>
+        </div>
+        <div className="ml-3">
+          <h2 className="font-semibold text-gray-800 text-sm">AI 셰프</h2>
+          <p className="text-xs text-gray-500">맞춤형 레시피 추천</p>
+        </div>
+      </div>
+
+      {/* 메시지 영역 */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.map((message, index) => (
           <div key={message.id}>
