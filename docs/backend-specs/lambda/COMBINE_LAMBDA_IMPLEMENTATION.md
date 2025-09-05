@@ -3,8 +3,18 @@
 ## 구현 상태: ✅ 완료 (100%)
 
 **구현 일자**: 2025-09-05  
+**최종 업데이트**: 2025-09-05 16:50 UTC  
 **담당**: api-integration-agent  
-**테스트 상태**: ✅ 통합 테스트 완료  
+**테스트 상태**: ✅ Step Functions 통합 테스트 완료  
+**배포 상태**: ✅ AWS Lambda 프로덕션 환경 배포됨
+
+## 주요 업데이트 (2025-09-05)
+
+### Step Functions 통합 지원
+- ✅ Step Functions 워크플로우 형식 지원 추가
+- ✅ `{sessionId, recipeResult, pricingResult}` 형식 처리
+- ✅ 기존 레거시 형식들과 호환성 유지
+- ✅ 프로덕션 배포 및 테스트 완료  
 
 ## 구현된 파일 구조
 
