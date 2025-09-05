@@ -7,11 +7,9 @@
    - Network:      http://172.30.1.96:3000
 
  ✓ Starting...
- ✓ Ready in 920ms
+ ✓ Ready in 1081ms
  ○ Compiling / ...
- ✓ Compiled / in 1975ms
- GET / 200 in 2230ms
- GET / 200 in 229ms
- ✓ Compiled /favicon.ico in 357ms
- GET /favicon.ico?favicon.0b3bf435.ico 200 in 641ms
- ✓ Compiled in 141ms
+ ✓ Compiled / in 2.3s
+ GET / 200 in 2648ms
+ ✓ Compiled /favicon.ico in 216ms
+ GET /favicon.ico?favicon.0b3bf435.ico 200 in 504ms

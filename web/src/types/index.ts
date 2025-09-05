@@ -31,6 +31,9 @@ export interface NutritionInfo {
   fiber?: number;
   sugar?: number;
   sodium?: number;
+  carbsPercent?: number;    // ChatScreen에서 사용
+  proteinPercent?: number;  // ChatScreen에서 사용
+  fatPercent?: number;      // ChatScreen에서 사용
 }
 
 // 레시피 정보
