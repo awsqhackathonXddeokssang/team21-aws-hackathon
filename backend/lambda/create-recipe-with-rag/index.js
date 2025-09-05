@@ -1,7 +1,7 @@
 const { BedrockRuntimeClient, InvokeModelCommand } = require('@aws-sdk/client-bedrock-runtime');
 const { Client } = require('@opensearch-project/opensearch');
 const { AwsSigv4Signer } = require('@opensearch-project/opensearch/aws');
-const { DynamoDBClient, GetItemCommand } = require('@aws-sdk/client-dynamodb');
+const { DynamoDBClient, GetItemCommand, PutItemCommand } = require('@aws-sdk/client-dynamodb');
 
 const bedrock = new BedrockRuntimeClient({ region: 'us-east-1' });
 const dynamoClient = new DynamoDBClient({ region: 'us-east-1' });
@@ -31,6 +31,31 @@ async function getSessionProfile(sessionId) {
         return JSON.parse(response.Item.profile.S);
     } catch (error) {
         console.error('Error getting session profile:', error);
+        throw error;
+    }
+}
+
+async function saveRecipeToResults(sessionId, recipe) {
+    try {
+        const timestamp = new Date().toISOString();
+        const resultId = `${sessionId}_recipe`;
+        
+        await dynamoClient.send(new PutItemCommand({
+            TableName: 'ai-chef-results',
+            Item: {
+                resultId: { S: resultId },
+                sessionId: { S: sessionId },
+                type: { S: 'recipe' },
+                status: { S: 'completed' },
+                recipe: { S: JSON.stringify(recipe) },
+                createdAt: { S: timestamp },
+                ttl: { N: Math.floor(Date.now() / 1000 + 7 * 24 * 60 * 60).toString() }
+            }
+        }));
+        
+        console.log('Recipe saved to ai-chef-results for session:', sessionId);
+    } catch (error) {
+        console.error('Error saving recipe to DynamoDB:', error);
         throw error;
     }
 }
@@ -85,14 +110,8 @@ async function searchNutritionData(ingredients) {
 async function generateRecipe(profile) {
     console.log('Starting recipe generation for profile:', JSON.stringify(profile));
     
-    const nutritionData = await searchNutritionData(['닭가슴살', '브로콜리', '현미', '올리브오일', '아보카도']);
-    console.log('Retrieved nutrition data:', nutritionData.length, 'items');
-    
-    const nutritionContext = nutritionData.map(item => 
-        `${item.food_name}: 칼로리 ${item.energy_kcal}kcal/100g, 탄수화물 ${item.carb_g}g, 단백질 ${item.protein_g}g, 지방 ${item.fat_g}g`
-    ).join('\n');
-
-    console.log('Nutrition context:', nutritionContext);
+    // Skip OpenSearch for now - let Bedrock handle everything
+    console.log('Skipping nutrition data lookup - using Bedrock knowledge');
 
     const prompt = `다음 사용자 프로필에 맞는 레시피를 생성해주세요:
 
@@ -104,9 +123,6 @@ async function generateRecipe(profile) {
 - 알레르기: ${profile.allergies ? profile.allergies.join(', ') : '없음'}
 - 조리시간: ${profile.cookingTime || 30}분
 - 추가 정보: ${profile.additional_info ? JSON.stringify(profile.additional_info) : '없음'}
-
-영양소 데이터베이스:
-${nutritionContext}
 
 다음 JSON 형식으로 응답해주세요:
 {
@@ -182,9 +198,12 @@ exports.handler = async (event) => {
             };
         }
 
-        // 세션에서 프로필 조회
-        const profile = await getSessionProfile(sessionId);
+        // 페이로드에서 프로필 직접 사용 (Step Functions에서 전달)
+        const profile = event.profile || await getSessionProfile(sessionId);
         const recipe = await generateRecipe(profile);
+        
+        // DynamoDB에 레시피 저장
+        await saveRecipeToResults(sessionId, recipe);
 
         return {
             statusCode: 200,
