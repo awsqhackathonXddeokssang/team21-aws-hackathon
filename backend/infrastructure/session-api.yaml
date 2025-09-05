@@ -2,9 +2,6 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: 'AI Chef Session API - Lambda and API Gateway'
 
 Parameters:
-  Environment:
-    Type: String
-    Default: dev
 
 Resources:
   # Session Lambda Execution Role
@@ -30,7 +27,7 @@ Resources:
                   - dynamodb:GetItem
                   - dynamodb:PutItem
                   - dynamodb:UpdateItem
-                Resource: !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/ai-chef-sessions-${Environment}'
+                Resource: 'arn:aws:dynamodb:*:*:table/ai-chef-sessions'
         - PolicyName: StepFunctionsAccess
           PolicyDocument:
             Version: '2012-10-17'
@@ -38,13 +35,13 @@ Resources:
               - Effect: Allow
                 Action:
                   - states:StartExecution
-                Resource: !Sub 'arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:ai-chef-workflow-${Environment}'
+                Resource: 'arn:aws:states:*:*:stateMachine:ai-chef-workflow'
 
   # Session Lambda Function
   SessionLambda:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub 'ai-chef-session-api-${Environment}'
+      FunctionName: 'ai-chef-session-api'
       Runtime: python3.11
       Handler: lambda_function.lambda_handler
       Role: !GetAtt SessionLambdaRole.Arn
@@ -315,12 +312,12 @@ Resources:
       - ProcessOptionsMethod
     Properties:
       RestApiId: !Ref ApiGateway
-      StageName: !Ref Environment
+      StageName: prod
 
 Outputs:
   ApiGatewayUrl:
     Description: 'API Gateway URL'
-    Value: !Sub 'https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+    Value: !Sub 'https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod'
     Export:
       Name: !Sub '${AWS::StackName}-ApiGatewayUrl'
       

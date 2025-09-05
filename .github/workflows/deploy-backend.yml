@@ -21,7 +21,7 @@ jobs:
       run: |
         cd backend/infrastructure
         chmod +x deploy-session-api.sh
-        ./deploy-session-api.sh dev
+        ./deploy-session-api.sh
     
     - name: Discord Success Notification
       if: success()
