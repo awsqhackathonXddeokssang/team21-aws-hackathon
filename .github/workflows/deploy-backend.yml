@@ -25,3 +25,37 @@ jobs:
         cd backend/infrastructure
         chmod +x deploy-session-api.sh
         ./deploy-session-api.sh dev
+    
+    - name: Discord Success Notification
+      if: success()
+      run: |
+        curl -H "Content-Type: application/json" \
+        -d '{
+          "embeds": [{
+            "title": "✅ Backend Deployment Success",
+            "description": "API Gateway deployed successfully",
+            "color": 3066993,
+            "fields": [
+              {"name": "Branch", "value": "${{ github.ref_name }}", "inline": true},
+              {"name": "Commit", "value": "${{ github.sha }}", "inline": true}
+            ]
+          }]
+        }' \
+        https://discord.com/api/webhooks/1399402822105038999/2qQDazifNKeW_c8MhHqcrw6Li5yDQtBL7f2JIBQ_b4qVT3Vxh7TfpMV3kBFnDYAFL3-h
+    
+    - name: Discord Failure Notification
+      if: failure()
+      run: |
+        curl -H "Content-Type: application/json" \
+        -d '{
+          "embeds": [{
+            "title": "❌ Backend Deployment Failed",
+            "description": "API Gateway deployment failed",
+            "color": 15158332,
+            "fields": [
+              {"name": "Branch", "value": "${{ github.ref_name }}", "inline": true},
+              {"name": "Commit", "value": "${{ github.sha }}", "inline": true}
+            ]
+          }]
+        }' \
+        https://discord.com/api/webhooks/1399402822105038999/2qQDazifNKeW_c8MhHqcrw6Li5yDQtBL7f2JIBQ_b4qVT3Vxh7TfpMV3kBFnDYAFL3-h
