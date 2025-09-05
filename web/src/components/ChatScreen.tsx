@@ -180,7 +180,7 @@ export default function ChatScreen() {
         {/* 타겟 선택 버튼들 */}
         {showTargetSelection && (
           <div className="flex justify-start ml-2">
-            <div className="max-w-[70%]">
+            <div className="max-w-[85%]">
               <div className="grid grid-cols-2 gap-2">
                 {targetInfos.map((target) => (
                   <button
@@ -192,7 +192,7 @@ export default function ChatScreen() {
                       <div className="w-8 h-8 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center mr-3">
                         <span className="text-lg">{target.icon}</span>
                       </div>
-                      <span className="text-sm font-bold text-gray-800">{target.name}</span>
+                      <span className="text-xs font-bold text-gray-800">{target.name}</span>
                     </div>
                   </button>
                 ))}
@@ -204,7 +204,7 @@ export default function ChatScreen() {
         {/* 옵션 선택 버튼들 */}
         {currentOptions.length > 0 && (
           <div className="flex justify-start ml-2">
-            <div className="max-w-[70%]">
+            <div className="max-w-[85%]">
               <div className="grid grid-cols-2 gap-2">
                 {currentOptions.map((option, index) => (
                   <button
@@ -212,7 +212,7 @@ export default function ChatScreen() {
                     onClick={() => handleOptionSelect(option)}
                     className="py-3 px-4 rounded-lg bg-gradient-to-r from-white to-gray-50 hover:from-orange-50 hover:to-orange-100 shadow-md hover:shadow-xl ring-1 ring-gray-200 hover:ring-orange-300 transform hover:scale-[1.02] hover:-translate-y-1 transition-all duration-300 text-left"
                   >
-                    <span className="text-sm font-bold text-gray-800">{option}</span>
+                    <span className="text-xs font-bold text-gray-800">{option}</span>
                   </button>
                 ))}
               </div>
