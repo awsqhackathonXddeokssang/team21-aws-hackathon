@@ -51,25 +51,31 @@ export default function ChatScreen() {
       timestamp: new Date()
     };
 
-    // AI 응답 메시지 추가
-    const aiResponse: ChatMessage = {
-      id: `ai-response-${Date.now()}`,
-      type: 'ai',
-      content: getTargetResponseMessage(target),
-      timestamp: new Date()
-    };
+    setMessages(prev => [...prev, userMessage]);
+    setIsLoading(true);
 
-    const nextQuestion: ChatMessage = {
-      id: `ai-question-${Date.now()}`,
-      type: 'ai',
-      content: '몇 인분이 필요하신가요?',
-      timestamp: new Date(),
-      messageType: 'choice',
-      options: ['1인분', '2인분', '3-4인분', '5인분 이상']
-    };
+    setTimeout(() => {
+      // AI 응답 메시지 추가
+      const aiResponse: ChatMessage = {
+        id: `ai-response-${Date.now()}`,
+        type: 'ai',
+        content: getTargetResponseMessage(target),
+        timestamp: new Date()
+      };
 
-    setMessages(prev => [...prev, userMessage, aiResponse, nextQuestion]);
-    setCurrentStep(1);
+      const nextQuestion: ChatMessage = {
+        id: `ai-question-${Date.now()}`,
+        type: 'ai',
+        content: '몇 인분이 필요하신가요?',
+        timestamp: new Date(),
+        messageType: 'choice',
+        options: ['1인분', '2인분', '3-4인분', '5인분 이상']
+      };
+
+      setMessages(prev => [...prev, aiResponse, nextQuestion]);
+      setCurrentStep(1);
+      setIsLoading(false);
+    }, 1000);
   };
 
   const handleOptionSelect = async (option: string) => {
@@ -179,8 +185,24 @@ export default function ChatScreen() {
           </div>
         ))}
 
+        {/* 타이핑 인디케이터 */}
+        {isLoading && (
+          <div className="flex justify-start">
+            <div className="max-w-[80%] px-4 py-3 rounded-2xl bg-gray-100 text-gray-800 rounded-bl-sm shadow-sm">
+              <div className="flex items-center space-x-1">
+                <span className="text-sm">입력 중</span>
+                <div className="typing-dots flex space-x-1">
+                  <span className="w-1 h-1 bg-gray-500 rounded-full inline-block"></span>
+                  <span className="w-1 h-1 bg-gray-500 rounded-full inline-block"></span>
+                  <span className="w-1 h-1 bg-gray-500 rounded-full inline-block"></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* 타겟 선택 버튼들 */}
-        {!selectedTarget && (
+        {!selectedTarget && !isLoading && (
           <div className="flex justify-start ml-2">
             <div className="w-full">
               <div className="grid grid-cols-2 gap-2">
@@ -204,7 +226,7 @@ export default function ChatScreen() {
         )}
 
         {/* 옵션 선택 버튼들 */}
-        {shouldShowOptions && (
+        {shouldShowOptions && !isLoading && (
           <div className="flex justify-start ml-2">
             <div className="w-full">
               <div className="grid grid-cols-2 gap-2">
