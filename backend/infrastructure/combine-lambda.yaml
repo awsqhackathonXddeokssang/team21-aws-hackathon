@@ -48,16 +48,12 @@ Resources:
           import json
           import boto3
           from datetime import datetime
-          from typing import Dict, Any
 
-          # AWS 리소스 초기화
           dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
           sessions_table = dynamodb.Table('ai-chef-sessions')
 
-          def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
-              """Combine Lambda handler - Recipe Lambda 스타일"""
+          def lambda_handler(event, context):
               try:
-                  # Step Functions 형식 처리
                   session_id = event.get('sessionId')
                   recipe_result = event.get('recipeResult')
                   pricing_result = event.get('pricingResult')
@@ -66,200 +62,54 @@ Resources:
                   if not session_id or not recipe_result or not pricing_result:
                       raise ValueError('sessionId, recipeResult, and pricingResult required')
                   
-                  # 세션 상태 업데이트
-                  update_session_status(session_id, 'processing', 'combining_results', 90)
-                  
                   # 레시피와 가격 데이터 결합
-                  combined_result = combine_recipe_with_prices(
-                      recipe_result, pricing_result, session_id, profile
-                  )
+                  total_cost = pricing_result.get('recommendations', {}).get('totalEstimatedCost', 0)
                   
-                  # 최종 결과 저장
-                  save_final_result(session_id, combined_result)
-                  
-                  # 세션 완료
-                  update_session_status(session_id, 'completed', 'all_completed', 100)
+                  result = {
+                      'success': True,
+                      'data': {
+                          'sessionId': session_id,
+                          'recipe': {
+                              'name': recipe_result.get('name', recipe_result.get('recipeName', '')),
+                              'ingredients': recipe_result.get('ingredients', []),
+                              'instructions': recipe_result.get('instructions', []),
+                              'cookingTime': recipe_result.get('cookingTime', ''),
+                              'difficulty': recipe_result.get('difficulty', 'medium'),
+                              'servings': recipe_result.get('servings', 2)
+                          },
+                          'nutrition': {
+                              'total': recipe_result.get('nutrition', {}),
+                              'targetCompliance': recipe_result.get('targetCompliance', {})
+                          },
+                          'pricing': pricing_result,
+                          'totalEstimatedCost': total_cost,
+                          'generatedAt': datetime.now().isoformat(),
+                          'profile': profile,
+                          'summary': {
+                              'recipeAvailable': bool(recipe_result.get('name') or recipe_result.get('recipeName')),
+                              'pricingAvailable': pricing_result.get('summary', {}).get('foundIngredients', 0) > 0,
+                              'nutritionAvailable': bool(recipe_result.get('nutrition')),
+                              'successRate': pricing_result.get('summary', {}).get('successRate', 0)
+                          }
+                      },
+                      'metadata': {
+                          'source': 'CombineLambda',
+                          'timestamp': datetime.now().isoformat(),
+                          'version': '2.0'
+                      }
+                  }
                   
                   return {
                       'statusCode': 200,
-                      'headers': {
-                          'Content-Type': 'application/json; charset=utf-8'
-                      },
-                      'body': combined_result
+                      'headers': {'Content-Type': 'application/json; charset=utf-8'},
+                      'body': result
                   }
                   
               except Exception as e:
-                  update_session_status(session_id, 'failed', 'combining_failed', 90, str(e))
                   return {
                       'statusCode': 500,
-                      'body': {
-                          'success': False,
-                          'error': str(e)
-                      }
+                      'body': {'success': False, 'error': str(e)}
                   }
-
-          def combine_recipe_with_prices(recipe_result: Dict, pricing_result: Dict, 
-                                       session_id: str, profile: Dict = None) -> Dict:
-              """레시피와 가격 데이터 결합"""
-              
-              # 기본 레시피 정보
-              recipe = recipe_result
-              pricing = pricing_result
-              
-              # 영양 정보 처리
-              nutrition = {
-                  'total': recipe.get('nutrition', {}),
-                  'byIngredient': [],
-                  'density': calculate_nutrition_density(recipe.get('nutrition', {})),
-                  'targetCompliance': recipe.get('targetCompliance', {})
-              }
-              
-              # 쇼핑 정보 생성
-              shopping_info = create_shopping_info(pricing)
-              
-              # 총 예상 비용 계산
-              total_cost = pricing.get('recommendations', {}).get('totalEstimatedCost', 0)
-              
-              # 최종 결과 구성
-              result = {
-                  'success': True,
-                  'data': {
-                      'sessionId': session_id,
-                      'recipe': {
-                          'name': recipe.get('name', recipe.get('recipeName', '')),
-                          'ingredients': recipe.get('ingredients', []),
-                          'instructions': recipe.get('instructions', []),
-                          'cookingTime': recipe.get('cookingTime', recipe.get('cooking_time', '')),
-                          'difficulty': recipe.get('difficulty', 'medium'),
-                          'servings': recipe.get('servings', 2),
-                          'targetCompliance': recipe.get('targetCompliance', {})
-                      },
-                      'nutrition': nutrition,
-                      'pricing': pricing,
-                      'shoppingInfo': shopping_info,
-                      'totalEstimatedCost': total_cost,
-                      'generatedAt': datetime.now().isoformat(),
-                      'recipeImage': None,  # Recipe Image Generator 연동 시 사용
-                      'profile': profile,
-                      'summary': create_summary(recipe, pricing, nutrition, profile)
-                  },
-                  'error': None,
-                  'metadata': {
-                      'source': 'CombineLambda',
-                      'timestamp': datetime.now().isoformat(),
-                      'recipeSuccess': True,
-                      'priceSuccess': True,
-                      'processingTime': 0,  # Step Functions에서 계산
-                      'version': '2.0'
-                  }
-              }
-              
-              return result
-
-          def calculate_nutrition_density(nutrition: Dict) -> Dict:
-              """영양소 밀도 계산"""
-              calories = nutrition.get('calories', 0)
-              if calories == 0:
-                  return {}
-              
-              return {
-                  'proteinPerCalorie': nutrition.get('protein', 0) / calories if calories > 0 else 0,
-                  'fatPerCalorie': nutrition.get('fat', 0) / calories if calories > 0 else 0,
-                  'carbsPerCalorie': nutrition.get('carbs', 0) / calories if calories > 0 else None,
-                  'fiberPer100Cal': nutrition.get('fiber', 0) * 100 / calories if calories > 0 else None
-              }
-
-          def create_shopping_info(pricing: Dict) -> Dict:
-              """쇼핑 정보 생성"""
-              items = []
-              total_items = 0
-              total_cost = 0
-              
-              ingredients = pricing.get('ingredients', {})
-              for ingredient_name, products in ingredients.items():
-                  if products:
-                      # 최저가 상품 선택
-                      cheapest = products[0]
-                      items.append({
-                          'ingredient': ingredient_name,
-                          'product': cheapest
-                      })
-                      total_items += 1
-                      total_cost += cheapest.get('price', 0)
-              
-              return {
-                  'items': items,
-                  'totalItems': total_items,
-                  'totalCost': total_cost,
-                  'optimalVendors': pricing.get('recommendations', {}).get('optimalVendors', [])
-              }
-
-          def create_summary(recipe: Dict, pricing: Dict, nutrition: Dict, profile: Dict) -> Dict:
-              """요약 정보 생성"""
-              pricing_summary = pricing.get('summary', {})
-              
-              return {
-                  'recipeAvailable': bool(recipe.get('name') or recipe.get('recipeName')),
-                  'pricingAvailable': pricing_summary.get('foundIngredients', 0) > 0,
-                  'nutritionAvailable': bool(nutrition.get('total')),
-                  'imageAvailable': False,  # Recipe Image Generator 연동 시 True
-                  'profileAvailable': bool(profile),
-                  'ingredientsFound': pricing_summary.get('foundIngredients', 0),
-                  'totalIngredients': pricing_summary.get('totalIngredients', 0),
-                  'successRate': pricing_summary.get('successRate', 0),
-                  'targetCompliance': recipe.get('targetCompliance', {})
-              }
-
-          def update_session_status(session_id: str, status: str, phase: str, progress: int, error: str = None):
-              """세션 상태 업데이트 - Recipe Lambda 스타일"""
-              try:
-                  update_expression = "SET #status = :status, #phase = :phase, #progress = :progress, #updatedAt = :updatedAt"
-                  expression_values = {
-                      ':status': status,
-                      ':phase': phase,
-                      ':progress': progress,
-                      ':updatedAt': datetime.now().isoformat()
-                  }
-                  expression_names = {
-                      '#status': 'status',
-                      '#phase': 'phase',
-                      '#progress': 'progress',
-                      '#updatedAt': 'updatedAt'
-                  }
-                  
-                  if error:
-                      update_expression += ", #error = :error"
-                      expression_values[':error'] = error[:1000]
-                      expression_names['#error'] = 'error'
-                  
-                  sessions_table.update_item(
-                      Key={'sessionId': session_id},
-                      UpdateExpression=update_expression,
-                      ExpressionAttributeNames=expression_names,
-                      ExpressionAttributeValues=expression_values
-                  )
-                  
-              except Exception as e:
-                  print(f"Failed to update session status: {e}")
-
-          def save_final_result(session_id: str, result: Dict):
-              """최종 결과 저장 - Recipe Lambda 스타일"""
-              try:
-                  sessions_table.update_item(
-                      Key={'sessionId': session_id},
-                      UpdateExpression="SET #finalResult = :result, #completedAt = :completedAt",
-                      ExpressionAttributeNames={
-                          '#finalResult': 'finalResult',
-                          '#completedAt': 'completedAt'
-                      },
-                      ExpressionAttributeValues={
-                          ':result': result['data'],
-                          ':completedAt': datetime.now().isoformat()
-                      }
-                  )
-                  
-              except Exception as e:
-                  print(f"Failed to save final result: {e}")
 
 Outputs:
   CombineLambdaArn:
