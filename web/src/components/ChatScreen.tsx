@@ -189,12 +189,12 @@ export default function ChatScreen() {
         {isLoading && (
           <div className="flex justify-start">
             <div className="max-w-[80%] px-4 py-3 rounded-2xl bg-gray-100 text-gray-800 rounded-bl-sm shadow-sm">
-              <div className="flex items-center space-x-1">
+              <div className="flex items-center space-x-2">
                 <span className="text-sm">입력 중</span>
                 <div className="typing-dots flex space-x-1">
-                  <span className="w-1 h-1 bg-gray-500 rounded-full inline-block"></span>
-                  <span className="w-1 h-1 bg-gray-500 rounded-full inline-block"></span>
-                  <span className="w-1 h-1 bg-gray-500 rounded-full inline-block"></span>
+                  <span className="w-2 h-2 bg-gray-600 rounded-full inline-block"></span>
+                  <span className="w-2 h-2 bg-gray-600 rounded-full inline-block"></span>
+                  <span className="w-2 h-2 bg-gray-600 rounded-full inline-block"></span>
                 </div>
               </div>
             </div>
