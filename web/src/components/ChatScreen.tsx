@@ -6,6 +6,7 @@ import { targetInfos } from '@/lib/mockData';
 import { Loader2, ChefHat } from 'lucide-react';
 import ResultModal from './ResultModal';
 import { ApiService } from '@/lib/api';
+import { createScrollHandler } from '@/lib/scrollUtils';
 
 export default function ChatScreen() {
   const [selectedTarget, setSelectedTarget] = useState<UserTarget | null>(null);
@@ -24,10 +25,8 @@ export default function ChatScreen() {
   // 자동 스크롤을 위한 ref
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // 자동 스크롤 함수
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+  // 스마트 스크롤 핸들러 생성
+  const scrollToBottom = createScrollHandler(messagesEndRef);
 
   // 마지막 메시지 기반 선택지 표시 로직
   const lastMessage = messages[messages.length - 1];
@@ -96,6 +95,12 @@ export default function ChatScreen() {
   }, []);
 
   const handleTargetSelect = async (target: UserTarget) => {
+    // 세션 초기화 완료 대기
+    if (!sessionId) {
+      console.log('⏳ 세션 초기화 중... 잠시 후 다시 시도해주세요.');
+      return;
+    }
+
     setSelectedTarget(target);
     
     const targetInfo = targetInfos.find(t => t.id === target);
@@ -575,6 +580,22 @@ export default function ChatScreen() {
       const response = await ApiService.updateProfile(currentSessionId, profileData, inputText);
       console.log('✅ Additional info processed:', response);
 
+      // NON_FOOD_RELATED_PROMPT 응답 처리
+      if (response.isNonFoodPrompt) {
+        console.log('ℹ️ 음식 관련 내용이 아닙니다');
+        const guidanceMessage: ChatMessage = {
+          id: `ai-guidance-${Date.now()}`,
+          type: 'ai',
+          content: '음식이나 요리와 관련된 내용을 입력해주세요! 예를 들어 알레르기, 선호하는 맛, 싫어하는 음식, 건강 상태 등을 알려주시면 더 맞춤형 레시피를 추천해드릴 수 있어요. 😊',
+          timestamp: new Date(),
+          messageType: 'choice',
+          options: ['네, 더 있어요', '아니요, 이제 충분해요']
+        };
+        setMessages(prev => [...prev, guidanceMessage]);
+        setShowTextInput(true);
+        return;
+      }
+
       // AI 응답 메시지 추가
       const aiResponse: ChatMessage = {
         id: `ai-response-${Date.now()}`,
@@ -597,28 +618,14 @@ export default function ChatScreen() {
     } catch (error) {
       console.error('❌ Additional question processing failed:', error);
       
-      // NON_FOOD_RELATED_PROMPT 에러 처리
-      if (error instanceof Error && error.message.includes('NON_FOOD_RELATED_PROMPT')) {
-        const guidanceMessage: ChatMessage = {
-          id: `ai-guidance-${Date.now()}`,
-          type: 'ai',
-          content: '음식이나 요리와 관련된 내용을 입력해주세요! 예를 들어 알레르기, 선호하는 맛, 싫어하는 음식, 건강 상태 등을 알려주시면 더 맞춤형 레시피를 추천해드릴 수 있어요. 😊',
-          timestamp: new Date()
-        };
-        setMessages(prev => [...prev, guidanceMessage]);
-        
-        // 텍스트 입력창 다시 표시하여 대화 계속
-        setShowTextInput(true);
-      } else {
-        // 다른 에러는 기존 처리
-        const errorMessage: ChatMessage = {
-          id: `ai-error-${Date.now()}`,
-          type: 'ai',
-          content: '죄송해요, 일시적인 오류가 발생했어요. 다시 시도해주세요.',
-          timestamp: new Date()
-        };
-        setMessages(prev => [...prev, errorMessage]);
-      }
+      // 에러 시 fallback 응답
+      const errorMessage: ChatMessage = {
+        id: `ai-error-${Date.now()}`,
+        type: 'ai',
+        content: '죄송해요, 일시적인 오류가 발생했어요. 다시 시도해주세요.',
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
     }
@@ -1104,7 +1111,7 @@ export default function ChatScreen() {
       </div>
 
       {/* 메시지 영역 */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4" data-scroll-container>
         {messages.map((message, index) => (
           <div key={message.id}>
             <div className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}>
