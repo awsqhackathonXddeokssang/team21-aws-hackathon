@@ -1,0 +1,259 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'AI Chef Session API - Lambda and API Gateway'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+
+Resources:
+  # Session Lambda Execution Role
+  SessionLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                Resource: !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/ai-chef-sessions-${Environment}'
+        - PolicyName: StepFunctionsAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - states:StartExecution
+                Resource: !Sub 'arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:ai-chef-workflow-${Environment}'
+
+  # Session Lambda Function
+  SessionLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'ai-chef-session-${Environment}'
+      Runtime: python3.11
+      Handler: lambda_function.lambda_handler
+      Role: !GetAtt SessionLambdaRole.Arn
+      Timeout: 30
+      MemorySize: 256
+      Environment:
+        Variables:
+          SESSIONS_TABLE_NAME: !Sub 'ai-chef-sessions-${Environment}'
+          STEP_FUNCTIONS_ARN: !Sub 'arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:ai-chef-workflow-${Environment}'
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          from datetime import datetime
+          import logging
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+
+          dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
+          stepfunctions = boto3.client('stepfunctions', region_name='us-east-1')
+          sessions_table = dynamodb.Table('ai-chef-sessions-dev')
+
+          def lambda_handler(event, context):
+              try:
+                  session_id = event['pathParameters']['id']
+                  body = json.loads(event['body'])
+                  user_profile = body.get('userProfile')
+                  
+                  logger.info(f"Processing session: {session_id}")
+                  
+                  # 기본 검증
+                  if not user_profile or 'target' not in user_profile:
+                      return {
+                          'statusCode': 400,
+                          'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                          'body': json.dumps({'success': False, 'error': 'INVALID_PROFILE', 'message': '프로필이 필요합니다.'})
+                      }
+                  
+                  # 세션 업데이트
+                  sessions_table.update_item(
+                      Key={'sessionId': session_id},
+                      UpdateExpression="SET #status = :status, #profile = :profile, #updatedAt = :updatedAt",
+                      ExpressionAttributeNames={'#status': 'status', '#profile': 'profile', '#updatedAt': 'updatedAt'},
+                      ExpressionAttributeValues={
+                          ':status': 'processing',
+                          ':profile': user_profile,
+                          ':updatedAt': datetime.now().isoformat()
+                      }
+                  )
+                  
+                  # 워크플로우 시작
+                  workflow_input = {
+                      'sessionId': session_id,
+                      'profile': {
+                          'target': user_profile.get('target'),
+                          'budget': int(user_profile.get('responses', {}).get('100', 20000)),
+                          'servings': int(user_profile.get('responses', {}).get('101', 2))
+                      }
+                  }
+                  
+                  response = stepfunctions.start_execution(
+                      stateMachineArn='arn:aws:states:us-east-1:491085385364:stateMachine:ai-chef-workflow-dev',
+                      name=f'execution-{int(datetime.now().timestamp())}',
+                      input=json.dumps(workflow_input)
+                  )
+                  
+                  return {
+                      'statusCode': 200,
+                      'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                      'body': json.dumps({
+                          'success': True,
+                          'executionId': response['executionArn'],
+                          'estimatedTime': 30,
+                          'status': 'processing',
+                          'message': '레시피 생성이 시작되었습니다.'
+                      })
+                  }
+                  
+              except Exception as e:
+                  logger.error(f"Error: {str(e)}")
+                  return {
+                      'statusCode': 500,
+                      'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                      'body': json.dumps({'success': False, 'error': 'INTERNAL_ERROR', 'message': '서버 오류가 발생했습니다.'})
+                  }
+
+  # API Gateway
+  ApiGateway:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub 'ai-chef-api-${Environment}'
+      Description: 'AI Chef Session Processing API'
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+
+  # Session Resource
+  SessionResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !GetAtt ApiGateway.RootResourceId
+      PathPart: 'session'
+
+  # Session ID Resource
+  SessionIdResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !Ref SessionResource
+      PathPart: '{id}'
+
+  # Process Resource
+  ProcessResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !Ref SessionIdResource
+      PathPart: 'process'
+
+  # POST Method
+  ProcessMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref ProcessResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SessionLambda.Arn}/invocations'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: false
+        - StatusCode: 400
+        - StatusCode: 500
+
+  # OPTIONS Method for CORS
+  ProcessOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref ProcessResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: false
+            method.response.header.Access-Control-Allow-Methods: false
+            method.response.header.Access-Control-Allow-Origin: false
+
+  # Lambda Permission for API Gateway
+  LambdaApiGatewayPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref SessionLambda
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub '${ApiGateway}/*/POST/session/*/process'
+
+  # API Deployment
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - ProcessMethod
+      - ProcessOptionsMethod
+    Properties:
+      RestApiId: !Ref ApiGateway
+      StageName: !Ref Environment
+
+  # DynamoDB Sessions Table
+  SessionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'ai-chef-sessions-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: sessionId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: sessionId
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+
+Outputs:
+  ApiGatewayUrl:
+    Description: 'API Gateway URL'
+    Value: !Sub 'https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiGatewayUrl'
+      
+  SessionLambdaArn:
+    Description: 'Session Lambda Function ARN'
+    Value: !GetAtt SessionLambda.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-SessionLambdaArn'
