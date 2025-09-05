@@ -5,7 +5,6 @@ import { UserTarget, ChatMessage, Recipe } from '@/types';
 import { targetInfos } from '@/lib/mockData';
 import { Loader2, ChefHat } from 'lucide-react';
 import ResultModal from './ResultModal';
-import { MockApiService } from '@/lib/mockApi';
 import { ApiService } from '@/lib/api';
 
 export default function ChatScreen() {
@@ -111,7 +110,11 @@ export default function ChatScreen() {
     setMessages(prev => [...prev, userMessage]);
     setIsLoading(true);
 
-    setTimeout(() => {
+    try {
+      // 서버에 즉시 동기화
+      await ApiService.updateProfile(sessionId, { target });
+      console.log('✅ Target saved to server:', target);
+
       // AI 응답 메시지 추가
       const aiResponse: ChatMessage = {
         id: `ai-response-${Date.now()}`,
@@ -131,8 +134,19 @@ export default function ChatScreen() {
 
       setMessages(prev => [...prev, aiResponse, nextQuestion]);
       setCurrentStep(1);
+    } catch (error) {
+      console.error('❌ Failed to save target:', error);
+      // 에러 메시지 표시
+      const errorMessage: ChatMessage = {
+        id: `error-${Date.now()}`,
+        type: 'ai',
+        content: '죄송합니다. 일시적인 오류가 발생했습니다. 다시 시도해주세요.',
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
   };
 
   const handleOptionSelect = async (option: string) => {
@@ -147,7 +161,7 @@ export default function ChatScreen() {
     setMessages(prev => [...prev, userMessage]);
     setIsLoading(true);
 
-    setTimeout(() => {
+    try {
       // 추가 질문 단계인지 확인
       const isAdditionalQuestionPhase = currentStep === 2 || conversationPhase === 'additional';
       
@@ -165,12 +179,20 @@ export default function ChatScreen() {
           setShowTextInput(true);
           setConversationPhase('additional');
         } else if (option === '아니요, 충분해요' || option === '아니요, 이제 충분해요') {
-          // 제출하기 단계로
+          // 제출하기 단계로 (이미 서버에 데이터 저장되어 있음)
           setConversationPhase('complete');
           handleSubmitProfile();
           return;  // setIsLoading(false) 실행 방지
         } else if (currentStep === 2) {
-          // Step 2에서 일반 옵션 선택 시 추가 질문 보여주기
+          // Step 2에서 요리시간 선택 - 서버에 저장
+          await ApiService.updateProfile(sessionId, { 
+            target: selectedTarget,
+            servings: getServingsFromMessages(),
+            cookingTime: option 
+          });
+          console.log('✅ Cooking time saved to server:', option);
+
+          // 추가 질문 보여주기
           const additionalQuestionMessage: ChatMessage = {
             id: `ai-additional-${Date.now()}`,
             type: 'ai',
@@ -182,9 +204,17 @@ export default function ChatScreen() {
           setMessages(prev => [...prev, additionalQuestionMessage]);
           setConversationPhase('additional');
         }
-        setIsLoading(false);
       } else {
-        // 기본 질문 단계 (currentStep 0, 1)
+        // 기본 질문 단계 (currentStep 1: 인분 선택)
+        if (currentStep === 1) {
+          // 인분 선택 - 서버에 저장
+          await ApiService.updateProfile(sessionId, { 
+            target: selectedTarget,
+            servings: option 
+          });
+          console.log('✅ Servings saved to server:', option);
+        }
+
         const nextQuestion = getNextQuestion();
         const aiMessage: ChatMessage = {
           id: `ai-next-${Date.now()}`,
@@ -201,9 +231,28 @@ export default function ChatScreen() {
         if (currentStep === 1) {
           setConversationPhase('additional');
         }
-        setIsLoading(false);
       }
-    }, 1000);
+    } catch (error) {
+      console.error('❌ Failed to save option:', error);
+      // 에러 메시지 표시
+      const errorMessage: ChatMessage = {
+        id: `error-${Date.now()}`,
+        type: 'ai',
+        content: '죄송합니다. 일시적인 오류가 발생했습니다. 다시 시도해주세요.',
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // 메시지에서 인분 정보 추출하는 헬퍼 함수
+  const getServingsFromMessages = (): string => {
+    const servingMessage = messages.find(m => 
+      m.type === 'user' && m.content?.includes('인분')
+    );
+    return servingMessage?.content || '2인분';
   };
 
   const getNextQuestion = () => {
@@ -492,23 +541,19 @@ export default function ChatScreen() {
       // 현재 프로필 정보 구성
       const profileData = {
         target: selectedTarget,
-        servings: messages.find(m => m.content?.includes('인분'))?.content || '2인분',
-        cookingTime: 30,
-        additionalQuestions
+        servings: getServingsFromMessages(),
+        cookingTime: getCookingTimeFromMessages()
       };
 
-      // Mock Bedrock API 호출 (sessionId 포함)
-      const response = await MockApiService.processAdditionalQuestion(
-        inputText, 
-        sessionId, 
-        profileData
-      );
+      // ApiService를 통해 Bedrock 분석 요청
+      const response = await ApiService.updateProfile(sessionId, profileData, inputText);
+      console.log('✅ Additional info processed:', response);
 
       // AI 응답 메시지 추가
       const aiResponse: ChatMessage = {
         id: `ai-response-${Date.now()}`,
         type: 'ai',
-        content: response.response,
+        content: '네, 알겠습니다! 말씀해주신 내용을 반영해서 레시피를 준비하겠습니다.',
         timestamp: new Date()
       };
 
@@ -523,10 +568,8 @@ export default function ChatScreen() {
       };
 
       setMessages(prev => [...prev, aiResponse, nextQuestion]);
-      setIsLoading(false);
     } catch (error) {
-      console.error('추가 질문 처리 오류:', error);
-      setIsLoading(false);
+      console.error('❌ Additional question processing failed:', error);
       
       // 에러 시 fallback 응답
       const errorMessage: ChatMessage = {
@@ -536,7 +579,17 @@ export default function ChatScreen() {
         timestamp: new Date()
       };
       setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
     }
+  };
+
+  // 메시지에서 요리시간 정보 추출하는 헬퍼 함수
+  const getCookingTimeFromMessages = (): string => {
+    const timeMessage = messages.find(m => 
+      m.type === 'user' && (m.content?.includes('분') || m.content?.includes('시간'))
+    );
+    return timeMessage?.content || '30분 이내';
   };
 
   // 입력에 따른 맞춤 응답 생성 (임시)
@@ -563,282 +616,29 @@ export default function ChatScreen() {
     setMessages(prev => [...prev, submitMessage]);
     setIsLoading(true);
     
-    // 프로필 데이터 구성
-    const profileData = {
-      target: selectedTarget,
-      servings: messages.find(m => m.content?.includes('인분'))?.content || '2인분',
-      cookingTime: 30,
-      additionalQuestions,
-      conversationHistory: messages.map(m => ({
-        role: m.type,
-        content: m.content
-      }))
-    };
-
     try {
-      // TODO: Phase 3 - 백엔드로 프로필 제출 및 폴링 시작
-      // const response = await fetch('/api/process', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({
-      //     sessionId,
-      //     profile: profileData
-      //   })
-      // });
-      // const { executionId } = await response.json();
-      // setShowResult(true); // 폴링 시작 전에 로딩 화면 표시
+      // Phase 3 - 백엔드로 레시피 생성 요청
+      console.log('🍳 Starting recipe processing for session:', sessionId);
+      const response = await ApiService.processRecipe(sessionId);
+      console.log('✅ Recipe processing started:', response);
       
-      // // 폴링 시작 (3초마다 상태 확인)
-      // const pollInterval = setInterval(async () => {
-      //   const statusResponse = await fetch(`/api/status/${executionId}`);
-      //   const { status, result } = await statusResponse.json();
-      //   
-      //   if (status === 'completed') {
-      //     clearInterval(pollInterval);
-      //     setCurrentRecipe(result.recipe);
-      //     setIsLoading(false);
-      //   }
-      // }, 3000);
-
-      // Mock 처리 (실제로는 위의 폴링으로 대체)
-      // 로딩 화면으로 즉시 전환
+      // 로딩 화면으로 즉시 전환 (폴링은 ResultModal에서 처리)
       setShowResult(true);
       
-      setTimeout(async () => {
-        // 타겟별 하드코딩된 테스트 데이터
-        let hardcodedRecipe;
-        
-        switch (selectedTarget) {
-          case 'baby':
-            hardcodedRecipe = {
-              id: 'baby-chicken-pumpkin',
-              name: '닭가슴살 단호박 이유식',
-              description: '9-12개월 아기를 위한 영양만점 이유식입니다. 부드럽고 소화하기 쉬운 재료로 만든 건강한 한 끼입니다.',
-              cookingTime: 20,
-              difficulty: 'easy' as const,
-              servings: 2,
-              instructions: [
-                '닭가슴살은 깨끗이 씻어 한 입 크기로 썰어주세요',
-                '단호박은 껍질을 벗기고 작게 썰어주세요',
-                '브로콜리는 꽃송이만 떼어 작게 썰어주세요',
-                '물을 끓인 후 닭가슴살을 넣고 10분간 삶아주세요',
-                '단호박과 브로콜리를 넣고 5분 더 삶아주세요',
-                '모든 재료를 으깨서 아기가 먹기 좋은 크기로 만들어주세요'
-              ],
-              ingredients: [
-                {
-                  name: '닭가슴살',
-                  amount: '50g',
-                  prices: [
-                    { vendor: '이마트', price: 3500 },
-                    { vendor: '쿠팡', price: 3200 },
-                    { vendor: '마켓컬리', price: 3800 }
-                  ]
-                },
-                {
-                  name: '단호박',
-                  amount: '100g',
-                  prices: [
-                    { vendor: '이마트', price: 2000 },
-                    { vendor: '쿠팡', price: 1800 },
-                    { vendor: '마켓컬리', price: 2200 }
-                  ]
-                },
-                {
-                  name: '브로콜리',
-                  amount: '30g',
-                  prices: [
-                    { vendor: '이마트', price: 1500 },
-                    { vendor: '쿠팡', price: 1300 },
-                    { vendor: '마켓컬리', price: 1700 }
-                  ]
-                }
-              ],
-              nutrition: {
-                calories: 180,
-                carbs: 15,
-                protein: 18,
-                fat: 3,
-                carbsPercent: 33,
-                proteinPercent: 40,
-                fatPercent: 15
-              },
-              tags: ['이유식', '12개월', '영양균형'],
-              totalPrice: 6300
-            };
-            break;
-            
-          case 'diabetes':
-            hardcodedRecipe = {
-              id: 'diabetes-brown-rice-vegetables',
-              name: '현미 채소볶음',
-              description: '혈당 관리에 도움되는 저GI 현미와 신선한 채소로 만든 건강한 볶음밥입니다.',
-              cookingTime: 25,
-              difficulty: 'easy' as const,
-              servings: 2,
-              instructions: [
-                '현미는 미리 불려서 밥을 지어주세요',
-                '브로콜리와 당근은 한 입 크기로 썰어주세요',
-                '팬에 올리브오일을 두르고 당근을 먼저 볶아주세요',
-                '브로콜리를 넣고 2분간 더 볶아주세요',
-                '현미밥을 넣고 골고루 섞어가며 볶아주세요',
-                '소금과 후추로 간을 맞춰 완성해주세요'
-              ],
-              ingredients: [
-                {
-                  name: '현미',
-                  amount: '1컵',
-                  prices: [
-                    { vendor: '이마트', price: 4500 },
-                    { vendor: '쿠팡', price: 4200 },
-                    { vendor: '마켓컬리', price: 4800 }
-                  ]
-                },
-                {
-                  name: '브로콜리',
-                  amount: '100g',
-                  prices: [
-                    { vendor: '이마트', price: 2500 },
-                    { vendor: '쿠팡', price: 2200 },
-                    { vendor: '마켓컬리', price: 2800 }
-                  ]
-                },
-                {
-                  name: '당근',
-                  amount: '1개',
-                  prices: [
-                    { vendor: '이마트', price: 1200 },
-                    { vendor: '쿠팡', price: 1000 },
-                    { vendor: '마켓컬리', price: 1400 }
-                  ]
-                },
-                {
-                  name: '올리브오일',
-                  amount: '1큰술',
-                  prices: [
-                    { vendor: '이마트', price: 6800 },
-                    { vendor: '쿠팡', price: 5900 },
-                    { vendor: '마켓컬리', price: 7200 }
-                  ]
-                }
-              ],
-              nutrition: {
-                calories: 320,
-                carbs: 45,
-                protein: 12,
-                fat: 8,
-                carbsPercent: 56,
-                proteinPercent: 15,
-                fatPercent: 23
-              },
-              tags: ['당뇨식', '저GI', '고섬유', '혈당관리'],
-              totalPrice: 15000
-            };
-            break;
-            
-          default: // keto
-            hardcodedRecipe = {
-              id: 'keto-shrimp-avocado',
-              name: '케토 새우 아보카도 볶음',
-              description: '저탄수화물 고지방 케톤 다이어트에 완벽한 새우 아보카도 요리입니다. 신선한 새우와 크리미한 아보카도의 조화가 일품입니다.',
-              cookingTime: 15,
-              difficulty: 'easy' as const,
-              servings: 2,
-              instructions: [
-                '새우는 껍질을 벗기고 내장을 제거한 후 깨끗이 씻어주세요',
-                '아보카도는 반으로 갈라 씨를 제거하고 한 입 크기로 썰어주세요',
-                '팬에 버터를 두르고 중불에서 녹여주세요',
-                '새우를 넣고 2-3분간 볶아 색이 변하면 뒤집어주세요',
-                '아보카도를 넣고 1분간 가볍게 볶아주세요',
-                '올리브오일을 뿌리고 소금, 후추로 간을 맞춰 완성해주세요'
-              ],
-              ingredients: [
-                {
-                  name: '새우',
-                  amount: '200g',
-                  prices: [
-                    { vendor: '이마트', price: 8900 },
-                    { vendor: '쿠팡', price: 7500 },
-                    { vendor: '마켓컬리', price: 8200 }
-                  ]
-                },
-                {
-                  name: '아보카도',
-                  amount: '1개',
-                  prices: [
-                    { vendor: '이마트', price: 2500 },
-                    { vendor: '쿠팡', price: 2200 },
-                    { vendor: '마켓컬리', price: 2800 }
-                  ]
-                },
-                {
-                  name: '버터',
-                  amount: '20g',
-                  prices: [
-                    { vendor: '이마트', price: 4500 },
-                    { vendor: '쿠팡', price: 3900 },
-                    { vendor: '마켓컬리', price: 4200 }
-                  ]
-                },
-                {
-                  name: '올리브오일',
-                  amount: '1큰술',
-                  prices: [
-                    { vendor: '이마트', price: 6800 },
-                    { vendor: '쿠팡', price: 5900 },
-                    { vendor: '마켓컬리', price: 7200 }
-                  ]
-                },
-                {
-                  name: '소금',
-                  amount: '약간',
-                  prices: [
-                    { vendor: '이마트', price: 1200 },
-                    { vendor: '쿠팡', price: 1000 },
-                    { vendor: '마켓컬리', price: 1500 }
-                  ]
-                }
-              ],
-              nutrition: {
-                calories: 420,
-                carbs: 8,
-                protein: 25,
-                fat: 35,
-                carbsPercent: 7,
-                proteinPercent: 23,
-                fatPercent: 70
-              },
-              tags: ['케토', '고지방', '저탄수화물', '오메가3'],
-              totalPrice: 23400
-            };
-        }
-        
-        setCurrentRecipe(hardcodedRecipe);
-        
-        // 모든 재료를 기본적으로 체크된 상태로 설정
-        const initialCheckedItems: {[key: string]: boolean} = {};
-        hardcodedRecipe.ingredients.forEach(ingredient => {
-          initialCheckedItems[ingredient.name] = true;
-        });
-        setCheckedItems(initialCheckedItems);
-        
-        setIsLoading(false);
-      }, 5000); // 5초 로딩 시뮬레이션
-      
     } catch (error) {
-      console.error('Error submitting profile:', error);
+      console.error('❌ Recipe processing failed:', error);
       setIsLoading(false);
       
+      // 에러 메시지 표시
       const errorMessage: ChatMessage = {
-        id: `ai-error-${Date.now()}`,
+        id: `error-${Date.now()}`,
         type: 'ai',
-        content: '레시피 생성 중 오류가 발생했습니다. 다시 시도해주세요.',
+        content: '죄송합니다. 레시피 생성 중 오류가 발생했습니다. 다시 시도해주세요.',
         timestamp: new Date()
       };
       setMessages(prev => [...prev, errorMessage]);
     }
   };
-
   const getTargetResponseMessage = (target: UserTarget): string => {
     const messages = {
       keto: '케톤 다이어트를 선택하셨네요! 🥑\n저탄고지 레시피를 추천해드릴게요.',
