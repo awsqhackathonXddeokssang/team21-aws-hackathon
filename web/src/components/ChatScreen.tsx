@@ -180,7 +180,7 @@ export default function ChatScreen() {
         ))}
 
         {/* 타겟 선택 버튼들 */}
-        {showTargetSelection && (
+        {!selectedTarget && (
           <div className="flex justify-start ml-2">
             <div className="w-full">
               <div className="grid grid-cols-2 gap-2">
@@ -204,11 +204,11 @@ export default function ChatScreen() {
         )}
 
         {/* 옵션 선택 버튼들 */}
-        {currentOptions.length > 0 && (
+        {shouldShowOptions && (
           <div className="flex justify-start ml-2">
             <div className="w-full">
               <div className="grid grid-cols-2 gap-2">
-                {currentOptions.map((option, index) => (
+                {lastMessage?.options?.map((option, index) => (
                   <button
                     key={index}
                     onClick={() => handleOptionSelect(option)}
@@ -218,6 +218,9 @@ export default function ChatScreen() {
                   </button>
                 ))}
               </div>
+            </div>
+          </div>
+        )}
             </div>
           </div>
         )}
