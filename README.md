@@ -2,6 +2,12 @@
 
 Amazon Q Developer Hackathon으로 구현한 개인 맞춤형 AI 레시피 추천 및 가격 비교 서비스입니다.
 
+## ⚠️ 중요: 배포 가이드
+**배포 전 반드시 [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md)를 읽어주세요!**
+- 2시간 삽질 방지용 가이드
+- GitHub Actions 필수 사용
+- 수동 배포 절대 금지
+
 ## 어플리케이션 개요
 
 개인의 건강 목표와 예산에 맞춘 맞춤형 레시피를 실시간 최저가 정보와 함께 제공하는 AI 기반 식단 관리 서비스입니다.
