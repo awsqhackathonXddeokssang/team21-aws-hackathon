@@ -17,6 +17,7 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
     session_id = None
     try:
         logger.info("=== Combine Lambda 시작 ===")
+        logger.info(f"입력 이벤트: {json.dumps(event, ensure_ascii=False, default=str)}")
         logger.info(f"입력 이벤트 타입: {type(event)}")
         logger.info(f"입력 이벤트 키들: {list(event.keys()) if isinstance(event, dict) else 'Not a dict'}")
         
@@ -25,6 +26,11 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
         recipe_result = event.get('recipeResult')
         pricing_result = event.get('pricingResult')
         profile = event.get('profile')
+        
+        # JSON 문자열 파싱
+        if isinstance(recipe_result, str):
+            logger.info("recipeResult가 문자열입니다. JSON 파싱 중...")
+            recipe_result = json.loads(recipe_result)
         
         logger.info(f"세션 ID: {session_id}")
         logger.info(f"레시피 결과 타입: {type(recipe_result)}")
@@ -78,11 +84,13 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
         logger.error(f"에러 타입: {type(e).__name__}")
         logger.error(f"에러 메시지: {str(e)}")
         logger.error(f"세션 ID: {session_id}")
+        logger.error(f"입력 이벤트: {json.dumps(event, ensure_ascii=False, default=str)}")
         
         import traceback
         logger.error(f"스택 트레이스: {traceback.format_exc()}")
         
         if session_id:
+            logger.error(f"세션 상태를 'failed'로 변경: {session_id}")
             update_session_status(session_id, 'failed', 'combining_failed', 90, str(e))
         
         return {
@@ -100,6 +108,11 @@ def combine_recipe_with_prices(recipe_result: Dict, pricing_result: Dict,
     logger.info("=== 데이터 결합 함수 시작 ===")
     
     try:
+        # recipe_result가 문자열인 경우 JSON 파싱
+        if isinstance(recipe_result, str):
+            logger.info("recipe_result가 문자열입니다. JSON 파싱 중...")
+            recipe_result = json.loads(recipe_result)
+        
         # 레시피 데이터 파싱
         logger.info("레시피 데이터 파싱 시작...")
         recipe_data = recipe_result.get('recipe')
