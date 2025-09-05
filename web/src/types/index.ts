@@ -15,11 +15,11 @@ export interface TargetInfo {
 export interface Ingredient {
   name: string;
   amount: string;
-  unit?: string;  // ResultModal에서 사용
-  price?: number;  // ResultModal에서 사용 (단일값)
-  store?: string;  // ResultModal에서 사용
-  url?: string;    // mockData에서 사용
-  prices?: Array<{vendor: string; price: number}>;  // ChatScreen에서 사용
+  unit?: string;
+  price?: number;
+  store?: string;
+  url?: string;
+  prices?: Array<{vendor: string; price: number; url?: string}>;
 }
 
 // 영양 정보
@@ -87,8 +87,17 @@ export interface ChatMessage {
 export interface ApiResponse<T> {
   success: boolean;
   data?: T;
-  error?: string;
+  error?: {
+    code?: string;
+    message: string;
+    details?: any;
+  };
   message?: string;
+  metadata?: {
+    source?: string;
+    timestamp?: string;
+    processingTime?: number;
+  };
 }
 
 // 세션 정보

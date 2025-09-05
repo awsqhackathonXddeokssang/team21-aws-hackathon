@@ -194,7 +194,7 @@ export default function ResultModal({ recipe, target, onClose, onNewRecipe }: Re
                   </div>
                   <div className="flex items-center space-x-2">
                     <span className="price-badge">
-                      {ingredient.price.toLocaleString()}원
+                      {ingredient.price ? ingredient.price.toLocaleString() : '0'}원
                     </span>
                     <button className="p-1 hover:bg-gray-200 rounded">
                       <ExternalLink className="w-4 h-4 text-gray-500" />

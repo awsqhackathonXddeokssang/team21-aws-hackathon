@@ -455,7 +455,7 @@ export default function ChatScreen() {
       setCurrentRecipe(hardcodedRecipe);
       
       // 모든 재료를 기본적으로 체크된 상태로 설정
-      const initialCheckedItems = {};
+      const initialCheckedItems: {[key: string]: boolean} = {};
       hardcodedRecipe.ingredients.forEach(ingredient => {
         initialCheckedItems[ingredient.name] = true;
       });
@@ -811,7 +811,7 @@ export default function ChatScreen() {
         setCurrentRecipe(hardcodedRecipe);
         
         // 모든 재료를 기본적으로 체크된 상태로 설정
-        const initialCheckedItems = {};
+        const initialCheckedItems: {[key: string]: boolean} = {};
         hardcodedRecipe.ingredients.forEach(ingredient => {
           initialCheckedItems[ingredient.name] = true;
         });
@@ -1354,7 +1354,7 @@ export default function ChatScreen() {
                     onClick={() => {
                       const textarea = document.querySelector('textarea');
                       const text = textarea?.value.trim();
-                      if (text) {
+                      if (text && textarea) {
                         handleTextInput(text);
                         textarea.value = '';
                       }
