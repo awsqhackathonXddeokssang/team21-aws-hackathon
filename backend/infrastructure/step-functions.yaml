@@ -41,26 +41,6 @@ Resources:
                 "FunctionName": "create-recipe-with-rag",
                 "Payload.$": "$"
               },
-              "ResultPath": "$.ragResult",
-              "Next": "OrchestrateSession"
-            },
-            "OrchestrateSession": {
-              "Type": "Task",
-              "Resource": "arn:aws:states:::lambda:invoke",
-              "Parameters": {
-                "FunctionName": "ai-chef-orchestrator",
-                "Payload.$": "$"
-              },
-              "ResultPath": "$.sessionResult",
-              "Next": "GenerateRecipe"
-            },
-            "GenerateRecipe": {
-              "Type": "Task",
-              "Resource": "arn:aws:states:::lambda:invoke",
-              "Parameters": {
-                "FunctionName": "ai-chef-recipe",
-                "Payload.$": "$"
-              },
               "ResultSelector": {
                 "recipe.$": "$.Payload.body"
               },
@@ -77,7 +57,7 @@ Resources:
                       "Type": "Task",
                       "Resource": "arn:aws:states:::lambda:invoke",
                       "Parameters": {
-                        "FunctionName": "ai-chef-price",
+                        "FunctionName": "PriceLambda",
                         "Payload": {
                           "sessionId.$": "$.sessionId",
                           "profile.$": "$.profile",
@@ -119,7 +99,7 @@ Resources:
               "Type": "Task",
               "Resource": "arn:aws:states:::lambda:invoke",
               "Parameters": {
-                "FunctionName": "ai-chef-combine",
+                "FunctionName": "CombineLambda",
                 "Payload": {
                   "sessionId.$": "$.sessionId",
                   "profile.$": "$.profile",

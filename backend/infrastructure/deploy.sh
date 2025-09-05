@@ -1,53 +1,48 @@
 #!/bin/bash
 
-# AI Chef Step Functions Deployment Script
+# AI Chef Lambda Functions Deployment Script
 
 set -e
 
-STACK_NAME="ai-chef-step-functions"
-ENVIRONMENT=${1:-dev}
-REGION=${AWS_DEFAULT_REGION:-ap-northeast-2}
+REGION="us-east-1"
 
-echo "🚀 Deploying AI Chef Step Functions to ${ENVIRONMENT} environment..."
+echo "🚀 Deploying AI Chef Lambda Functions..."
 
-# Deploy CloudFormation stack
+# Deploy Recipe Lambda
+echo "📦 Deploying Recipe Lambda..."
 aws cloudformation deploy \
-  --template-file step-functions.yaml \
-  --stack-name ${STACK_NAME}-${ENVIRONMENT} \
-  --parameter-overrides Environment=${ENVIRONMENT} \
+  --template-file recipe-lambda.yaml \
+  --stack-name ai-chef-recipe-lambda \
   --capabilities CAPABILITY_IAM \
   --region ${REGION}
 
-# Get outputs
-STACK_OUTPUTS=$(aws cloudformation describe-stacks \
-  --stack-name ${STACK_NAME}-${ENVIRONMENT} \
-  --region ${REGION} \
-  --query 'Stacks[0].Outputs')
+# Deploy Price Lambda
+echo "💰 Deploying Price Lambda..."
+aws cloudformation deploy \
+  --template-file price-lambda.yaml \
+  --stack-name ai-chef-price-lambda \
+  --capabilities CAPABILITY_IAM \
+  --region ${REGION}
 
-STATE_MACHINE_ARN=$(echo $STACK_OUTPUTS | jq -r '.[] | select(.OutputKey=="StateMachineArn") | .OutputValue')
-SESSION_TABLE=$(echo $STACK_OUTPUTS | jq -r '.[] | select(.OutputKey=="SessionTableName") | .OutputValue')
+# Deploy Combine Lambda
+echo "🔗 Deploying Combine Lambda..."
+aws cloudformation deploy \
+  --template-file combine-lambda.yaml \
+  --stack-name ai-chef-combine-lambda \
+  --capabilities CAPABILITY_IAM \
+  --region ${REGION}
 
-echo "✅ Deployment completed!"
-echo "📊 State Machine ARN: ${STATE_MACHINE_ARN}"
-echo "🗄️  Session Table: ${SESSION_TABLE}"
+# Deploy Image Generator Lambda
+echo "🖼️  Deploying Image Generator Lambda..."
+aws cloudformation deploy \
+  --template-file image-generator-lambda.yaml \
+  --stack-name ai-chef-image-generator-lambda \
+  --capabilities CAPABILITY_IAM \
+  --region ${REGION}
 
-# Test the workflow
-echo "🧪 Testing workflow..."
-EXECUTION_ARN=$(aws stepfunctions start-execution \
-  --state-machine-arn ${STATE_MACHINE_ARN} \
-  --name "test-$(date +%s)" \
-  --input '{
-    "sessionId": "test-session",
-    "userInput": {
-      "dietType": "keto",
-      "healthGoals": ["weight_loss"],
-      "allergies": [],
-      "budget": 30000
-    }
-  }' \
-  --region ${REGION} \
-  --query 'executionArn' \
-  --output text)
-
-echo "🔄 Execution started: ${EXECUTION_ARN}"
-echo "Monitor at: https://${REGION}.console.aws.amazon.com/states/home?region=${REGION}#/executions/details/${EXECUTION_ARN}"
+echo "✅ All Lambda functions deployed successfully!"
+echo "📊 Functions deployed:"
+echo "  - ai-chef-recipe"
+echo "  - PriceLambda"
+echo "  - CombineLambda"
+echo "  - recipe-image-generator"

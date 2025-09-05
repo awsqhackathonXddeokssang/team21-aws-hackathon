@@ -1,0 +1,67 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'AI Chef Price Lambda Function'
+
+Resources:
+  # Lambda Execution Role
+  PriceLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  # Price Lambda Function
+  PriceLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: 'PriceLambda'
+      Runtime: nodejs18.x
+      Handler: index.handler
+      Role: !GetAtt PriceLambdaRole.Arn
+      Timeout: 30
+      MemorySize: 256
+      Environment:
+        Variables:
+          NAVER_CLIENT_ID: '5A_tDnltTaEiCEsXbHH7'
+          NAVER_CLIENT_SECRET: 'ygjYjr9oqc'
+      Code:
+        ZipFile: |
+          const { fetchIngredientPrices } = require('./utils/naver-client');
+          const { formatPricingResult, formatStandardResponse } = require('./utils/formatter');
+
+          exports.handler = async (event) => {
+              const startTime = Date.now();
+              
+              try {
+                  console.log('Price Lambda 시작:', JSON.stringify(event));
+                  
+                  const { sessionId, profile, ingredients } = event;
+                  
+                  if (!ingredients || !Array.isArray(ingredients)) {
+                      throw new Error('재료 정보가 필요합니다.');
+                  }
+                  
+                  const pricingData = await fetchIngredientPrices(ingredients);
+                  const result = formatPricingResult(pricingData, profile);
+                  
+                  console.log(`Price Lambda 완료 (${Date.now() - startTime}ms)`);
+                  
+                  return formatStandardResponse(200, result);
+              } catch (error) {
+                  console.error('Price Lambda 오류:', error);
+                  return formatStandardResponse(500, { error: error.message });
+              }
+          };
+
+Outputs:
+  PriceLambdaArn:
+    Description: 'Price Lambda Function ARN'
+    Value: !GetAtt PriceLambda.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-PriceLambdaArn'

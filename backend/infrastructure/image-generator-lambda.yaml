@@ -1,0 +1,103 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'AI Chef Recipe Image Generator Lambda Function'
+
+Resources:
+  # Lambda Execution Role
+  ImageGeneratorLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: BedrockAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource: '*'
+
+  # Recipe Image Generator Lambda Function
+  RecipeImageGeneratorLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: 'recipe-image-generator'
+      Runtime: nodejs18.x
+      Handler: index.handler
+      Role: !GetAtt ImageGeneratorLambdaRole.Arn
+      Timeout: 60
+      MemorySize: 512
+      Code:
+        ZipFile: |
+          const { BedrockRuntimeClient, InvokeModelCommand } = require("@aws-sdk/client-bedrock-runtime");
+
+          const client = new BedrockRuntimeClient({ region: "us-east-1" });
+
+          exports.handler = async (event) => {
+              try {
+                  console.log('Event:', JSON.stringify(event, null, 2));
+                  
+                  const { sessionId, recipe } = event;
+                  
+                  if (!recipe || !recipe.name) {
+                      throw new Error('Recipe information is required');
+                  }
+                  
+                  const prompt = `Create a beautiful, appetizing image of ${recipe.name}. The dish should look professional and delicious.`;
+                  
+                  const input = {
+                      modelId: "amazon.titan-image-generator-v1",
+                      contentType: "application/json",
+                      accept: "application/json",
+                      body: JSON.stringify({
+                          taskType: "TEXT_IMAGE",
+                          textToImageParams: {
+                              text: prompt,
+                              negativeText: "blurry, low quality, distorted"
+                          },
+                          imageGenerationConfig: {
+                              numberOfImages: 1,
+                              height: 512,
+                              width: 512,
+                              cfgScale: 8.0
+                          }
+                      })
+                  };
+                  
+                  const command = new InvokeModelCommand(input);
+                  const response = await client.send(command);
+                  
+                  const responseBody = JSON.parse(new TextDecoder().decode(response.body));
+                  
+                  return {
+                      statusCode: 200,
+                      body: {
+                          sessionId,
+                          imageUrl: responseBody.images[0],
+                          prompt: prompt,
+                          timestamp: new Date().toISOString()
+                      }
+                  };
+              } catch (error) {
+                  console.error('Image generation error:', error);
+                  return {
+                      statusCode: 500,
+                      body: { error: error.message }
+                  };
+              }
+          };
+
+Outputs:
+  RecipeImageGeneratorLambdaArn:
+    Description: 'Recipe Image Generator Lambda Function ARN'
+    Value: !GetAtt RecipeImageGeneratorLambda.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-RecipeImageGeneratorLambdaArn'

@@ -1,0 +1,67 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'AI Chef Combine Lambda Function'
+
+Resources:
+  # Lambda Execution Role
+  CombineLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  # Combine Lambda Function
+  CombineLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: 'CombineLambda'
+      Runtime: nodejs18.x
+      Handler: index.handler
+      Role: !GetAtt CombineLambdaRole.Arn
+      Timeout: 30
+      MemorySize: 128
+      Code:
+        ZipFile: |
+          exports.handler = async (event) => {
+              try {
+                  console.log('Combine Lambda input:', JSON.stringify(event, null, 2));
+                  
+                  const { sessionId, profile, recipeResult, pricingResult, imageResult } = event;
+                  
+                  const combinedResult = {
+                      sessionId,
+                      profile,
+                      recipe: recipeResult,
+                      pricing: pricingResult,
+                      image: imageResult,
+                      timestamp: new Date().toISOString(),
+                      status: 'completed'
+                  };
+                  
+                  console.log('Combined result:', JSON.stringify(combinedResult, null, 2));
+                  
+                  return {
+                      statusCode: 200,
+                      body: combinedResult
+                  };
+              } catch (error) {
+                  console.error('Combine Lambda error:', error);
+                  return {
+                      statusCode: 500,
+                      body: { error: error.message }
+                  };
+              }
+          };
+
+Outputs:
+  CombineLambdaArn:
+    Description: 'Combine Lambda Function ARN'
+    Value: !GetAtt CombineLambda.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-CombineLambdaArn'
