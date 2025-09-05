@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'AI Chef Session API - Lambda and API Gateway'
+Description: 'AI Chef Session API - Lambda and API Gateway - Updated 2025-09-06T00:34 - Added status update'
 
 Resources:
   # Session Lambda Execution Role
@@ -137,6 +137,17 @@ Resources:
                   
                   session_data = response['Item']
                   profile = json.loads(session_data.get('profile', '{}'))
+                  
+                  # 세션 상태를 processing으로 업데이트
+                  sessions_table.update_item(
+                      Key={'sessionId': session_id},
+                      UpdateExpression='SET #status = :status, updatedAt = :updated',
+                      ExpressionAttributeNames={'#status': 'status'},
+                      ExpressionAttributeValues={
+                          ':status': 'processing',
+                          ':updated': datetime.now().isoformat()
+                      }
+                  )
                   
                   # Step Functions 워크플로우 시작
                   workflow_input = {
