@@ -144,7 +144,19 @@ export default function ChatScreen() {
   return (
     <div className="h-full bg-white flex flex-col">
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {/* 메시지들만 여기에 */}
+        {messages.map((message, index) => (
+          <div key={message.id}>
+            <div className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}>
+              <div className={`max-w-[80%] px-4 py-3 rounded-2xl ${
+                message.type === 'user'
+                  ? 'bg-orange-500 text-white rounded-br-sm'
+                  : 'bg-gray-100 text-gray-800 rounded-bl-sm'
+              } shadow-sm`}>
+                <p className="text-sm leading-relaxed">{message.content}</p>
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
