@@ -40,7 +40,6 @@ export default function ChatScreen() {
 
   const handleTargetSelect = async (target: UserTarget) => {
     setSelectedTarget(target);
-    setShowTargetSelection(false);
     
     const targetInfo = targetInfos.find(t => t.id === target);
     
@@ -64,11 +63,12 @@ export default function ChatScreen() {
       id: `ai-question-${Date.now()}`,
       type: 'ai',
       content: '몇 인분이 필요하신가요?',
-      timestamp: new Date()
+      timestamp: new Date(),
+      messageType: 'choice',
+      options: ['1인분', '2인분', '3-4인분', '5인분 이상']
     };
 
     setMessages(prev => [...prev, userMessage, aiResponse, nextQuestion]);
-    setCurrentOptions(['1인분', '2인분', '3-4인분', '5인분 이상']);
     setCurrentStep(1);
   };
 
@@ -82,7 +82,6 @@ export default function ChatScreen() {
     };
 
     setMessages(prev => [...prev, userMessage]);
-    setCurrentOptions([]);
     setIsLoading(true);
 
     setTimeout(() => {
@@ -96,10 +95,11 @@ export default function ChatScreen() {
           id: `ai-next-${Date.now()}`,
           type: 'ai',
           content: nextQuestion.question,
-          timestamp: new Date()
+          timestamp: new Date(),
+          messageType: 'choice',
+          options: nextQuestion.options
         };
         setMessages(prev => [...prev, aiMessage]);
-        setCurrentOptions(nextQuestion.options);
         setCurrentStep(prev => prev + 1);
         setIsLoading(false);
       }
