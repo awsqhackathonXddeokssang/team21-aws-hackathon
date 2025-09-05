@@ -88,9 +88,16 @@ exports.handler = async (event) => {
     }
 
     try {
-        const sessionId = event.pathParameters.sessionId;
         const requestBody = JSON.parse(event.body);
-        const { userPrompt, ...profileData } = requestBody;
+        const { sessionId, userPrompt, ...profileData } = requestBody;
+
+        if (!sessionId) {
+            return {
+                statusCode: 400,
+                headers,
+                body: JSON.stringify({ error: 'Session ID is required' })
+            };
+        }
 
         // Get current session
         const getResult = await dynamodb.send(new GetItemCommand({
