@@ -61,7 +61,7 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
             'nutritionInfo': nutrition_info
         }
         save_to_results_table(session_id, result_data, profile)
-        
+
         return {
             'statusCode': 200,
             'body': result_data
@@ -86,15 +86,15 @@ def save_to_results_table(session_id: str, result_data: Dict, profile: Dict):
     try:
         result_id = f"{session_id}_recipe"
         timestamp = datetime.now().isoformat()
-        
+
         # Float를 Decimal로 변환
         converted_data = convert_floats_to_decimal(result_data)
-        
+
         # 안전한 데이터 접근
         recipe = converted_data.get('recipe', {})
         nutrition_info = converted_data.get('nutritionInfo', {})
         total_nutrition = nutrition_info.get('total', {}) if isinstance(nutrition_info, dict) else {}
-        
+
         # Results 테이블 저장 구조
         item = {
             'resultId': result_id,
@@ -104,10 +104,10 @@ def save_to_results_table(session_id: str, result_data: Dict, profile: Dict):
             'createdAt': timestamp,
             'updatedAt': timestamp,
             'ttl': int(datetime.now().timestamp()) + (7 * 24 * 60 * 60),  # 7일 후 만료
-            
+
             # 레시피 데이터
             'data': converted_data,
-            
+
             # 메타데이터
             'metadata': {
                 'target': profile.get('target', 'general'),
@@ -116,7 +116,7 @@ def save_to_results_table(session_id: str, result_data: Dict, profile: Dict):
                 'apiVersion': 'v1.0',
                 'source': 'bedrock-claude'
             },
-            
+
             # 요약 정보 (빠른 조회용)
             'summary': {
                 'recipeName': recipe.get('recipeName', '레시피') if isinstance(recipe, dict) else '레시피',
@@ -127,12 +127,12 @@ def save_to_results_table(session_id: str, result_data: Dict, profile: Dict):
                 'target': profile.get('target', 'general')
             }
         }
-        
+
         results_table.put_item(Item=item)
         logger.info(f"✅ Recipe data saved to results table: {result_id}")
-        
+
         return result_id
-        
+
     except Exception as e:
         logger.error(f"❌ Failed to save recipe to results table: {e}")
         # 저장 실패해도 레시피 생성은 성공으로 처리
@@ -177,7 +177,7 @@ def generate_recipe_with_bedrock(profile: Dict[str, Any]) -> Dict[str, Any]:
     
     try:
         response = bedrock.invoke_model(
-            modelId='anthropic.claude-opus-4-1-20250805-v1:0',
+            modelId='anthropic.claude-3-5-sonnet-20241022-v2:0',
             body=json.dumps({
                 'anthropic_version': 'bedrock-2023-05-31',
                 'max_tokens': 4000,
