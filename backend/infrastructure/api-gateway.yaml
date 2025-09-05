@@ -1,11 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'AI Chef API Gateway for Session Processing and Results'
 
-Parameters:
-  Environment:
-    Type: String
-    Default: dev
-
 Resources:
   # API Gateway
   ApiGateway:
@@ -153,12 +148,12 @@ Resources:
       - ResultOptionsMethod
     Properties:
       RestApiId: !Ref ApiGateway
-      StageName: !Ref Environment
+      StageName: prod
 
 Outputs:
   ApiGatewayUrl:
     Description: 'API Gateway URL'
-    Value: !Sub 'https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+    Value: !Sub 'https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod'
     Export:
       Name: !Sub '${AWS::StackName}-ApiGatewayUrl'
       
