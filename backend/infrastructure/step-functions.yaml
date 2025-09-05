@@ -1,0 +1,320 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'AI Chef Step Functions Workflow'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, prod]
+
+Resources:
+  # DynamoDB Table for Session Management
+  SessionTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'ai-chef-sessions-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: sessionId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: sessionId
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+
+  # IAM Role for Lambda Functions
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                Resource: !GetAtt SessionTable.Arn
+        - PolicyName: BedrockAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource: '*'
+
+  # Lambda Functions
+  OrchestratorLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'ai-chef-orchestrator-${Environment}'
+      Runtime: python3.11
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          SESSION_TABLE: !Ref SessionTable
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          from datetime import datetime, timedelta
+          
+          dynamodb = boto3.resource('dynamodb')
+          table = dynamodb.Table(os.environ['SESSION_TABLE'])
+          
+          def handler(event, context):
+              session_id = event.get('sessionId', 'default')
+              user_input = event.get('userInput', {})
+              
+              # Save session data
+              ttl = int((datetime.now() + timedelta(hours=24)).timestamp())
+              table.put_item(
+                  Item={
+                      'sessionId': session_id,
+                      'userInput': user_input,
+                      'ttl': ttl,
+                      'timestamp': datetime.now().isoformat()
+                  }
+              )
+              
+              return {
+                  'statusCode': 200,
+                  'sessionId': session_id,
+                  'userProfile': user_input
+              }
+
+  RecipeLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'ai-chef-recipe-${Environment}'
+      Runtime: python3.11
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 60
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          
+          bedrock = boto3.client('bedrock-runtime')
+          
+          def handler(event, context):
+              user_profile = event.get('sessionResult', {}).get('Payload', {}).get('userProfile', {})
+              
+              prompt = f"""
+              사용자 프로필: {json.dumps(user_profile, ensure_ascii=False)}
+              
+              위 프로필을 바탕으로 맞춤형 레시피를 추천해주세요.
+              응답은 다음 JSON 형식으로 해주세요:
+              {{
+                "recipeName": "레시피 이름",
+                "ingredients": ["재료1", "재료2"],
+                "instructions": ["단계1", "단계2"],
+                "nutrition": {{"calories": 300, "carbs": 20, "protein": 25, "fat": 10}}
+              }}
+              """
+              
+              try:
+                  response = bedrock.invoke_model(
+                      modelId='anthropic.claude-3-sonnet-20240229-v1:0',
+                      body=json.dumps({
+                          'anthropic_version': 'bedrock-2023-05-31',
+                          'max_tokens': 1000,
+                          'messages': [{'role': 'user', 'content': prompt}]
+                      })
+                  )
+                  
+                  result = json.loads(response['body'].read())
+                  recipe_text = result['content'][0]['text']
+                  
+                  return {
+                      'statusCode': 200,
+                      'recipe': recipe_text
+                  }
+              except Exception as e:
+                  return {
+                      'statusCode': 500,
+                      'error': str(e),
+                      'recipe': '{"recipeName": "기본 레시피", "ingredients": ["재료"], "instructions": ["조리법"], "nutrition": {"calories": 0}}'
+                  }
+
+  PriceLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'ai-chef-price-${Environment}'
+      Runtime: python3.11
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          import json
+          import urllib.request
+          import urllib.parse
+          
+          def handler(event, context):
+              # Mock price data for now
+              ingredients = ["양파", "당근", "감자", "닭가슴살"]
+              
+              price_data = []
+              for ingredient in ingredients:
+                  price_data.append({
+                      'name': ingredient,
+                      'price': 2000,
+                      'shop': '네이버쇼핑',
+                      'url': f'https://shopping.naver.com/search?query={urllib.parse.quote(ingredient)}'
+                  })
+              
+              return {
+                  'statusCode': 200,
+                  'priceInfo': price_data
+              }
+
+  CombineLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'ai-chef-combine-${Environment}'
+      Runtime: python3.11
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          import json
+          
+          def handler(event, context):
+              parallel_results = event.get('parallelResults', [])
+              
+              recipe_result = parallel_results[0].get('Payload', {})
+              price_result = parallel_results[1].get('Payload', {})
+              
+              combined_result = {
+                  'recipe': recipe_result.get('recipe', '{}'),
+                  'priceInfo': price_result.get('priceInfo', []),
+                  'timestamp': event.get('sessionResult', {}).get('Payload', {}).get('timestamp')
+              }
+              
+              return {
+                  'statusCode': 200,
+                  'result': combined_result
+              }
+
+  # Step Functions State Machine
+  StepFunctionsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: states.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: LambdaInvokePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource:
+                  - !GetAtt OrchestratorLambda.Arn
+                  - !GetAtt RecipeLambda.Arn
+                  - !GetAtt PriceLambda.Arn
+                  - !GetAtt CombineLambda.Arn
+
+  RecipeWorkflowStateMachine:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      StateMachineName: !Sub 'ai-chef-workflow-${Environment}'
+      RoleArn: !GetAtt StepFunctionsRole.Arn
+      DefinitionString: !Sub |
+        {
+          "Comment": "AI Chef Recipe Recommendation Workflow",
+          "StartAt": "OrchestrateSession",
+          "States": {
+            "OrchestrateSession": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "${OrchestratorLambda}",
+                "Payload.$": "$"
+              },
+              "ResultPath": "$.sessionResult",
+              "Next": "GenerateRecipeAndPrice"
+            },
+            "GenerateRecipeAndPrice": {
+              "Type": "Parallel",
+              "Branches": [
+                {
+                  "StartAt": "GenerateRecipe",
+                  "States": {
+                    "GenerateRecipe": {
+                      "Type": "Task",
+                      "Resource": "arn:aws:states:::lambda:invoke",
+                      "Parameters": {
+                        "FunctionName": "${RecipeLambda}",
+                        "Payload.$": "$"
+                      },
+                      "End": true
+                    }
+                  }
+                },
+                {
+                  "StartAt": "GetPriceInfo",
+                  "States": {
+                    "GetPriceInfo": {
+                      "Type": "Task",
+                      "Resource": "arn:aws:states:::lambda:invoke",
+                      "Parameters": {
+                        "FunctionName": "${PriceLambda}",
+                        "Payload.$": "$"
+                      },
+                      "End": true
+                    }
+                  }
+                }
+              ],
+              "ResultPath": "$.parallelResults",
+              "Next": "CombineResults"
+            },
+            "CombineResults": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "${CombineLambda}",
+                "Payload.$": "$"
+              },
+              "End": true
+            }
+          }
+        }
+
+Outputs:
+  StateMachineArn:
+    Description: 'Step Functions State Machine ARN'
+    Value: !Ref RecipeWorkflowStateMachine
+    Export:
+      Name: !Sub '${AWS::StackName}-StateMachineArn'
+  
+  SessionTableName:
+    Description: 'DynamoDB Session Table Name'
+    Value: !Ref SessionTable
+    Export:
+      Name: !Sub '${AWS::StackName}-SessionTable'

@@ -1,0 +1,104 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'AI Chef Step Functions State Machine Only'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+
+Resources:
+  # Step Functions Execution Role
+  StepFunctionsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: states.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: LambdaInvokePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: '*'
+
+  # Step Functions State Machine
+  RecipeWorkflowStateMachine:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      StateMachineName: !Sub 'ai-chef-workflow-${Environment}'
+      RoleArn: !GetAtt StepFunctionsRole.Arn
+      DefinitionString: |
+        {
+          "Comment": "AI Chef Recipe Recommendation Workflow",
+          "StartAt": "OrchestrateSession",
+          "States": {
+            "OrchestrateSession": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "ai-chef-orchestrator-PLACEHOLDER",
+                "Payload.$": "$"
+              },
+              "ResultPath": "$.sessionResult",
+              "Next": "GenerateRecipeAndPrice"
+            },
+            "GenerateRecipeAndPrice": {
+              "Type": "Parallel",
+              "Branches": [
+                {
+                  "StartAt": "GenerateRecipe",
+                  "States": {
+                    "GenerateRecipe": {
+                      "Type": "Task",
+                      "Resource": "arn:aws:states:::lambda:invoke",
+                      "Parameters": {
+                        "FunctionName": "ai-chef-recipe-PLACEHOLDER",
+                        "Payload.$": "$"
+                      },
+                      "End": true
+                    }
+                  }
+                },
+                {
+                  "StartAt": "GetPriceInfo",
+                  "States": {
+                    "GetPriceInfo": {
+                      "Type": "Task",
+                      "Resource": "arn:aws:states:::lambda:invoke",
+                      "Parameters": {
+                        "FunctionName": "ai-chef-price-PLACEHOLDER",
+                        "Payload.$": "$"
+                      },
+                      "End": true
+                    }
+                  }
+                }
+              ],
+              "ResultPath": "$.parallelResults",
+              "Next": "CombineResults"
+            },
+            "CombineResults": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "ai-chef-combine-PLACEHOLDER",
+                "Payload.$": "$"
+              },
+              "End": true
+            }
+          }
+        }
+
+Outputs:
+  StateMachineArn:
+    Description: 'Step Functions State Machine ARN'
+    Value: !Ref RecipeWorkflowStateMachine
+    Export:
+      Name: !Sub '${AWS::StackName}-StateMachineArn'

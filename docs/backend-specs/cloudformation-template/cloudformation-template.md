@@ -136,12 +136,6 @@ Outputs:
     Value: !GetAtt ApiGatewayStack.Outputs.ApiEndpoint
     Export:
       Name: !Sub '${ProjectName}-${Environment}-api-endpoint'
-  
-  WebSocketEndpoint:
-    Description: WebSocket API 엔드포인트
-    Value: !GetAtt ApiGatewayStack.Outputs.WebSocketEndpoint
-    Export:
-      Name: !Sub '${ProjectName}-${Environment}-websocket-endpoint'
 ```
 
 ## Lambda 함수 템플릿 (nested-templates/lambda-functions.yaml)

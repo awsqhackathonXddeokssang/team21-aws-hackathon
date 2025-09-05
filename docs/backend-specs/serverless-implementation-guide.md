@@ -13,7 +13,6 @@ graph TB
     
     subgraph "API Layer"
         APIGW[API Gateway]
-        WS[WebSocket API]
     end
     
     subgraph "Orchestration"
@@ -557,7 +556,7 @@ def get_nutrition_data(ingredient_name):
 ## 🎯 다음 단계
 
 ### 1. 고급 기능 추가
-- [ ] 실시간 알림 (WebSocket)
+- [ ] 실시간 알림 (WebSocket) - Phase 2
 - [ ] 사용자 피드백 시스템
 - [ ] A/B 테스트 프레임워크
 
@@ -570,6 +569,11 @@ def get_nutrition_data(ingredient_name):
 - [ ] CI/CD 파이프라인 구축
 - [ ] 자동화된 테스트 스위트
 - [ ] 성능 모니터링 강화
+
+### Phase 2: WebSocket 실시간 알림 (향후 개선)
+- WebSocket API Gateway 구현
+- 실시간 레시피 생성 진행 상황 알림
+- 사용자 간 실시간 상호작용 기능
 
 ---
 
