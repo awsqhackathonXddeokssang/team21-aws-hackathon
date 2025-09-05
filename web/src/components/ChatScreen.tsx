@@ -172,12 +172,12 @@ export default function ChatScreen() {
         {showTargetSelection && (
           <div className="flex justify-start">
             <div className="max-w-[85%] w-full">
-              <div className="grid grid-cols-1 gap-2">
-                {targetInfos.map((target) => (
+              <div className="grid grid-cols-2 gap-2">
+                {targetInfos.map((target, index) => (
                   <button
                     key={target.id}
                     onClick={() => handleTargetSelect(target.id)}
-                    className="py-3 px-4 rounded-lg bg-white hover:bg-orange-50 hover:border-orange-400 border border-gray-200 transition-colors duration-200 text-left"
+                    className={`py-3 px-4 rounded-lg bg-white hover:bg-orange-50 hover:border-orange-400 border border-gray-200 transition-colors duration-200 text-left ${index === 4 ? 'col-span-2' : ''}`}
                   >
                     <div className="flex items-center">
                       <span className="text-xl mr-3">{target.icon}</span>
@@ -194,7 +194,7 @@ export default function ChatScreen() {
         {currentOptions.length > 0 && (
           <div className="flex justify-start">
             <div className="max-w-[85%] w-full">
-              <div className="grid grid-cols-1 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 {currentOptions.map((option, index) => (
                   <button
                     key={index}
