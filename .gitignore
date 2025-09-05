@@ -1,0 +1,6 @@
+.DS_Store
+.idea/
+.amazonq/cli-todo-lists/
+node_modules/
+.env
+.env.local
