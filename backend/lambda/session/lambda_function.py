@@ -153,7 +153,7 @@ def start_workflow(session_id: str, user_profile: Dict[str, Any]) -> str:
         
         # Step Functions 실행
         response = stepfunctions.start_execution(
-            stateMachineArn='arn:aws:states:us-east-1:491085385364:stateMachine:ai-chef-workflow-dev',
+            stateMachineArn='arn:aws:states:us-east-1:491085385364:stateMachine:ai-chef-workflow',
             name=f'execution-{int(datetime.now().timestamp())}',
             input=json.dumps(workflow_input)
         )
