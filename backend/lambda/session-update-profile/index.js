@@ -88,6 +88,11 @@ exports.handler = async (event) => {
     }
 
     try {
+        // 디버깅을 위한 로그 추가
+        console.log('Event:', JSON.stringify(event, null, 2));
+        console.log('Event body type:', typeof event.body);
+        console.log('Event body:', event.body);
+        
         const requestBody = JSON.parse(event.body);
         const { sessionId, userPrompt, ...profileData } = requestBody;
 
