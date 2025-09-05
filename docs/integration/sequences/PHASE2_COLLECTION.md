@@ -1,7 +1,7 @@
 # Phase 2: 대화 정보 수집 시퀀스
 
 ## 개요
-사용자와의 대화를 통해 프로필 정보를 수집하고 비동기 처리를 시작하는 과정
+사용자와의 대화를 통해 프로필 정보를 수집하는 과정 (프로필 제출까지)
 
 ## 시퀀스 다이어그램
 
@@ -9,12 +9,8 @@
 sequenceDiagram
     participant User
     participant Frontend
-    participant API Gateway as API Gateway
-    participant Lambda
-    participant DynamoDB
-    participant Step Functions as Step Functions
 
-    Note over User, Step Functions: Phase 2: 대화 정보 수집
+    Note over User, Frontend: Phase 2: 대화 정보 수집
 
     %% 세션 시작 후 4단계 질문
     Note over Frontend: 세션 생성 완료 후 시작
@@ -44,21 +40,7 @@ sequenceDiagram
         Note over Frontend: 프로필 수집 완료
     end
     
-    %% 프로필 제출 및 처리 시작
-    Frontend->>API Gateway: POST /session/{id}/process
-    Note over Frontend: userProfile 전체 제출
-    
-    API Gateway->>Lambda: 프로필 처리 요청
-    Lambda->>DynamoDB: STATUS를 'processing'으로 업데이트
-    Lambda->>DynamoDB: 프로필 데이터 저장
-    DynamoDB-->>Lambda: 저장 완료
-    
-    Lambda->>Step Functions: executionArn으로 워크플로우 시작
-    Step Functions-->>Lambda: executionId 반환
-    
-    Lambda-->>API Gateway: executionId, estimatedTime(30초) 반환
-    API Gateway-->>Frontend: 처리 시작 응답
-    Frontend-->>User: "레시피 생성 중..." 메시지 표시
+    Note over Frontend: Phase 2 완료 - Phase 3로 이동
 ```
 
 ## 상세 플로우
@@ -133,70 +115,13 @@ function handleCustomQuestion(input) {
         // 텍스트 입력 모드로 전환
         setShowTextInput(true);
     }
-    // 프로필 제출로 진행
-    submitProfile();
+    // Phase 2 완료 - Phase 3로 이동
+    proceedToPhase3();
 }
 ```
 
-### 5. 프로필 제출 요청
-```javascript
-// POST /session/{sessionId}/process
-const requestBody = {
-    profile: {
-        target: "keto",              // 타겟 선택
-        servings: "2인분",           // 인분 선택
-        cookingTime: "30분 이내",    // 요리 시간
-        customRequest: "매운 음식 싫어해요",  // 추가 요청사항 (또는 null)
-        timestamp: new Date().toISOString()
-    }
-};
-```
+## 수집된 프로필 데이터 구조
 
-### 6. Lambda 처리 로직
-```javascript
-// DynamoDB 업데이트
-const updateParams = {
-    TableName: 'ai-chef-sessions',
-    Key: { sessionId },
-    UpdateExpression: 'SET #status = :status, #profile = :profile, #updatedAt = :updatedAt',
-    ExpressionAttributeNames: {
-        '#status': 'status',
-        '#profile': 'profile',
-        '#updatedAt': 'updatedAt'
-    },
-    ExpressionAttributeValues: {
-        ':status': 'processing',
-        ':profile': profile,
-        ':updatedAt': new Date().toISOString()
-    }
-};
-
-// Step Functions 시작
-const stepFunctionParams = {
-    stateMachineArn: process.env.RECIPE_WORKFLOW_ARN,
-    input: JSON.stringify({
-        sessionId,
-        profile,
-        timestamp: new Date().toISOString()
-    })
-};
-```
-
-### 7. 응답 데이터
-```json
-{
-    "executionId": "arn:aws:states:region:account:execution:RecipeWorkflow:exec-abc123",
-    "estimatedTime": 30
-}
-```
-
-## 상태 전이
-
-### 세션 상태 변화
-- `idle` → `collecting` (첫 번째 질문 시작)
-- `collecting` → `processing` (프로필 제출 완료)
-
-### 프로필 데이터 구조
 ```typescript
 interface UserProfile {
     // 4단계 질문 결과
@@ -204,26 +129,22 @@ interface UserProfile {
     servings: string;         // 인분 (필수)
     cookingTime: string;      // 요리 시간 (필수)
     customRequest?: string;   // 추가 요청사항 (선택)
-    timestamp: string;        // 제출 시간
+    timestamp: string;        // 수집 완료 시간
 }
 ```
 
-## 에러 처리
+## 상태 전이
 
-### 프로필 검증 실패
-- **HTTP 400**: 필수 필드 누락
-- **Response**: `{ error: "PROFILE_INVALID", message: "필수 정보가 누락되었습니다" }`
-
-### Step Functions 시작 실패
-- **HTTP 500**: 워크플로우 시작 오류
-- **Retry Logic**: 자동 재시도 없음, 사용자에게 재시도 옵션 제공
+### 세션 상태 변화
+- `idle` → `collecting` (첫 번째 질문 시작)
+- `collecting` → `ready_to_process` (프로필 수집 완료)
 
 ## 성능 최적화
 
 ### 클라이언트 사이드 처리
 - 4단계 질문-답변은 모두 프론트엔드에서 처리
-- 서버 통신은 최종 제출 시에만 발생
-- 네트워크 지연 최소화
+- 서버 통신 없이 로컬 상태 관리
+- 빠른 사용자 경험 제공
 
 ### 프로필 검증
 ```javascript
@@ -238,3 +159,10 @@ function validateProfile(profile) {
     return true;
 }
 ```
+
+## Phase 3 연결점
+
+Phase 2 완료 후 수집된 프로필 데이터는 Phase 3 (PROCESSING)로 전달되어:
+- `POST /session/{id}/process` API 호출
+- Step Functions 워크플로우 시작
+- 비동기 레시피 생성 처리
