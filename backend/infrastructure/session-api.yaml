@@ -1,8 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'AI Chef Session API - Lambda and API Gateway'
 
-Parameters:
-
 Resources:
   # Session Lambda Execution Role
   SessionLambdaRole:
