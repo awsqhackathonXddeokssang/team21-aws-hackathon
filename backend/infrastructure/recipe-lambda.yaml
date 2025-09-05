@@ -69,8 +69,11 @@ Resources:
                   # Update nutritionStatus to 'processing'
                   sessions_table.update_item(
                       Key={'sessionId': session_id},
-                      UpdateExpression='SET nutritionStatus = :status',
-                      ExpressionAttributeValues={':status': 'processing'}
+                      UpdateExpression='SET nutritionStatus = :status, recipeStatus = :recipe_status',
+                      ExpressionAttributeValues={
+                          ':status': 'processing',
+                          ':recipe_status': 'processing'
+                      }
                   )
                   
                   recipe = generate_recipe_with_bedrock(profile)
@@ -84,8 +87,11 @@ Resources:
                   # Update nutritionStatus to 'completed'
                   sessions_table.update_item(
                       Key={'sessionId': session_id},
-                      UpdateExpression='SET nutritionStatus = :status',
-                      ExpressionAttributeValues={':status': 'completed'}
+                      UpdateExpression='SET nutritionStatus = :status, recipeStatus = :recipe_status',
+                      ExpressionAttributeValues={
+                          ':status': 'completed',
+                          ':recipe_status': 'completed'
+                      }
                   )
                   
                   return {
@@ -103,8 +109,11 @@ Resources:
                   if session_id:
                       sessions_table.update_item(
                           Key={'sessionId': session_id},
-                          UpdateExpression='SET nutritionStatus = :status',
-                          ExpressionAttributeValues={':status': 'failed'}
+                          UpdateExpression='SET nutritionStatus = :status, recipeStatus = :recipe_status',
+                          ExpressionAttributeValues={
+                              ':status': 'failed',
+                              ':recipe_status': 'failed'
+                          }
                       )
                   return {
                       'statusCode': 500,
