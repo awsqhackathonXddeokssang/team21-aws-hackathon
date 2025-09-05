@@ -1004,15 +1004,15 @@ export default function ChatScreen() {
                       <h4 className="font-semibold text-gray-800 mb-4">조리 방법</h4>
                       <div className="space-y-4">
                         {currentRecipe.instructions.map((instruction, index) => (
-                          <div key={index} className="flex items-start">
-                            <div className="flex-shrink-0 w-8 h-8 bg-orange-500 text-white rounded-full flex items-center justify-center text-sm font-semibold mr-4">
+                          <div key={index} className="flex items-start relative">
+                            <div className="flex-shrink-0 w-8 h-8 bg-orange-500 text-white rounded-full flex items-center justify-center text-sm font-semibold mr-4 relative z-10">
                               {index + 1}
                             </div>
+                            {index < currentRecipe.instructions.length - 1 && (
+                              <div className="absolute left-4 top-8 w-px h-8 bg-gray-300"></div>
+                            )}
                             <div className="flex-1">
                               <p className="text-gray-700">{instruction}</p>
-                              {index < currentRecipe.instructions.length - 1 && (
-                                <div className="w-px h-4 bg-gray-300 ml-4 mt-2"></div>
-                              )}
                             </div>
                           </div>
                         ))}
