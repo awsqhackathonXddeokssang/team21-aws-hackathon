@@ -1,0 +1,21 @@
+{
+  "name": "ai-chef-combine-lambda",
+  "version": "1.0.0",
+  "description": "Price와 Nutrition 결과를 통합하는 Lambda 함수",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {},
+  "keywords": [
+    "aws",
+    "lambda",
+    "combine",
+    "hackathon"
+  ],
+  "author": "Team21 AWS Hackathon",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
