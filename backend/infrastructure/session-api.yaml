@@ -43,32 +43,6 @@ Resources:
                   - bedrock:InvokeModel
                 Resource: '*'
 
-  # Session Update Profile Lambda Function
-  SessionUpdateProfileLambda:
-    Type: AWS::Lambda::Function
-    Properties:
-      FunctionName: 'session-update-profile'
-      Runtime: nodejs18.x
-      Handler: index.handler
-      Role: !GetAtt SessionLambdaRole.Arn
-      Timeout: 30
-      MemorySize: 256
-      Environment:
-        Variables:
-          SESSIONS_TABLE_NAME: 'ai-chef-sessions'
-      Code:
-        ZipFile: |
-          exports.handler = async (event) => {
-              return {
-                  statusCode: 200,
-                  headers: {
-                      'Access-Control-Allow-Origin': '*',
-                      'Content-Type': 'application/json'
-                  },
-                  body: JSON.stringify({ message: 'Session update profile placeholder' })
-              };
-          };
-
   # Session Lambda Function
   SessionLambda:
     Type: AWS::Lambda::Function
@@ -243,12 +217,20 @@ Resources:
       ParentId: !Ref SessionResource
       PathPart: '{id}'
 
+  # Session Status Resource
+  SessionStatusResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !Ref SessionIdResource
+      PathPart: 'status'
+
   # Process Resource
   ProcessResource:
     Type: AWS::ApiGateway::Resource
     Properties:
       RestApiId: !Ref ApiGateway
-      ParentId: !Ref SessionIdResource
+      ParentId: !Ref SessionsResource
       PathPart: 'process'
 
   # Sessions GET Method (list sessions)
@@ -321,7 +303,7 @@ Resources:
       Integration:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
-        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SessionUpdateProfileLambda.Arn}/invocations'
+        Uri: 'arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:491085385364:function:session-update-profile/invocations'
       MethodResponses:
         - StatusCode: 200
           ResponseParameters:
@@ -342,6 +324,48 @@ Resources:
             ResponseParameters:
               method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
               method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: false
+            method.response.header.Access-Control-Allow-Methods: false
+            method.response.header.Access-Control-Allow-Origin: false
+
+  # Session Status GET Method
+  SessionStatusGetMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref SessionStatusResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: 'arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:491085385364:function:session-status/invocations'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: false
+
+  # Session Status OPTIONS Method for CORS
+  SessionStatusOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref SessionStatusResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
               method.response.header.Access-Control-Allow-Origin: "'*'"
         RequestTemplates:
           application/json: '{"statusCode": 200}'
@@ -396,11 +420,20 @@ Resources:
             method.response.header.Access-Control-Allow-Methods: false
             method.response.header.Access-Control-Allow-Origin: false
 
+  # Lambda Permission for API Gateway - Session Status
+  LambdaApiGatewaySessionStatusPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: 'arn:aws:lambda:us-east-1:491085385364:function:session-status'
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/GET/session/*/status'
+
   # Lambda Permission for API Gateway - Sessions Update
   LambdaApiGatewaySessionsUpdatePermission:
     Type: AWS::Lambda::Permission
     Properties:
-      FunctionName: !Ref SessionUpdateProfileLambda
+      FunctionName: 'arn:aws:lambda:us-east-1:491085385364:function:session-update-profile'
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/POST/sessions/update'
@@ -430,7 +463,7 @@ Resources:
       FunctionName: !Ref SessionLambda
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/POST/session/*/process'
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/POST/sessions/process'
 
   # API Deployment
   ApiDeploymentProd:
@@ -441,6 +474,8 @@ Resources:
       - SessionsOptionsMethod
       - SessionsUpdatePostMethod
       - SessionsUpdateOptionsMethod
+      - SessionStatusGetMethod
+      - SessionStatusOptionsMethod
       - ProcessMethod
       - ProcessOptionsMethod
     Properties:
