@@ -4,3 +4,10 @@
 node_modules/
 .env
 .env.local
+/backend/lambda/price/utils/.gitkeep
+/.amazonq/cli-agents/api-gateway-worker.json
+/.amazonq/cli-agents/api-integration-agent.json
+/.amazonq/cli-agents/dynamodb-expert.json
+/.amazonq/cli-agents/external-api-worker.json
+/.amazonq/cli-agents/lambda-dev-worker.json
+/.amazonq/cli-agents/project-manager.json

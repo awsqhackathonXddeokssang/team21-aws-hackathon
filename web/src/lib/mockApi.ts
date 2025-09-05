@@ -99,6 +99,9 @@ export class MockApiService {
     try {
       // 타겟별 샘플 레시피 중 랜덤 선택
       const recipes = sampleRecipes[target];
+      if (!recipes || recipes.length === 0) {
+        throw new Error(`No recipes available for target: ${target}`);
+      }
       const randomRecipe = recipes[Math.floor(Math.random() * recipes.length)];
       
       // 사용자 메시지에 따라 레시피 약간 수정
@@ -116,7 +119,9 @@ export class MockApiService {
     } catch (error) {
       return {
         success: false,
-        error: '레시피 생성 중 오류가 발생했습니다.'
+        error: {
+          message: '레시피 생성 중 오류가 발생했습니다.'
+        }
       };
     }
   }
@@ -148,7 +153,9 @@ export class MockApiService {
     } catch (error) {
       return {
         success: false,
-        error: 'AI 응답 생성 중 오류가 발생했습니다.'
+        error: {
+          message: 'AI 응답 생성 중 오류가 발생했습니다.'
+        }
       };
     }
   }
@@ -225,6 +232,16 @@ export class MockApiService {
         '혈당 관리에 도움되는 건강한 식단을 준비해드릴게요! 현재 혈당 수치나 식이 제한사항이 있나요? 💉',
         '당뇨 관리식으로 도와드릴게요! GI 지수가 낮은 재료로 맛있는 요리를 만들어드릴게요. 어떤 식사를 원하시나요? 🥗',
         '혈당에 좋은 레시피를 추천해드릴게요! 복용 중인 약물이나 특별한 주의사항이 있으시면 알려주세요 📋'
+      ],
+      general: [
+        '건강한 식단을 도와드릴게요! 어떤 종류의 요리를 원하시나요? 🍽️',
+        '맛있고 영양가 있는 레시피를 추천해드릴게요! 선호하는 재료나 조리법이 있나요? 👨‍🍳',
+        '균형 잡힌 식사를 준비해드릴게요! 특별한 식단 목표가 있으시면 알려주세요 🥘'
+      ],
+      fridge: [
+        '냉장고 파먹기 도전이네요! 현재 가지고 있는 재료들을 알려주시면 창의적인 레시피를 만들어드릴게요 🧊',
+        '알뜰한 요리 만들기를 도와드릴게요! 냉장고에 있는 재료 목록을 알려주세요 📝',
+        '남은 재료로 맛있는 요리를 만들어드릴게요! 어떤 식재료들이 있는지 알려주세요 ♻️'
       ]
     };
     

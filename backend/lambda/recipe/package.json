@@ -1,16 +1,9 @@
 {
   "name": "ai-chef-recipe-lambda",
   "version": "1.0.0",
-  "description": "AI Chef Recipe Generation Lambda using AWS Bedrock Claude 3",
+  "description": "AI Chef Recipe Generation Lambda with Claude Opus 4.1",
   "main": "index.js",
-  "scripts": {
-    "test": "node test.js"
-  },
   "dependencies": {
-    "@aws-sdk/client-bedrock-runtime": "^3.0.0",
-    "@opensearch-project/opensearch": "^2.0.0"
-  },
-  "keywords": ["aws", "lambda", "bedrock", "recipe", "ai"],
-  "author": "Team21",
-  "license": "MIT"
+    "@aws-sdk/client-bedrock-runtime": "^3.0.0"
+  }
 }

@@ -45,7 +45,7 @@ export const targetInfos: TargetInfo[] = [
 ];
 
 // 샘플 레시피
-export const sampleRecipes: Record<UserTarget, Recipe[]> = {
+export const sampleRecipes: Partial<Record<UserTarget, Recipe[]>> = {
   keto: [
     {
       id: 'keto-1',
@@ -132,7 +132,7 @@ export const sampleRecipes: Record<UserTarget, Recipe[]> = {
 };
 
 // 대화 시나리오
-export const conversationScenarios: Record<UserTarget, ChatMessage[]> = {
+export const conversationScenarios: Partial<Record<UserTarget, ChatMessage[]>> = {
   keto: [
     { id: '1', type: 'ai', content: '안녕하세요! 케톤 다이어트를 시작하신 것을 축하드려요 🥑 어떤 레시피를 찾고 계신가요?', timestamp: new Date() },
     { id: '2', type: 'user', content: '간단하고 맛있는 샐러드 레시피 추천해주세요', timestamp: new Date() },

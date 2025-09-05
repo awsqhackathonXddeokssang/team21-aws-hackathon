@@ -1,17 +1,16 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'AI Chef Recipe Lambda Function'
+Description: 'AI Chef Recipe Lambda with Claude Opus 4.1'
 
 Parameters:
   Environment:
     Type: String
     Default: dev
-    Description: Environment name
 
 Resources:
+  # Lambda Execution Role
   RecipeLambdaRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub 'ai-chef-recipe-lambda-role-${Environment}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -29,17 +28,9 @@ Resources:
               - Effect: Allow
                 Action:
                   - bedrock:InvokeModel
-                Resource: '*'
-        - PolicyName: OpenSearchAccess
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - es:ESHttpPost
-                  - es:ESHttpGet
-                Resource: !Sub 'arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/nutrition-rag-dev-search/*'
+                Resource: 'arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-opus-4-1-20250805-v1:0'
 
+  # Recipe Lambda Function
   RecipeLambda:
     Type: AWS::Lambda::Function
     Properties:
@@ -49,27 +40,99 @@ Resources:
       Role: !GetAtt RecipeLambdaRole.Arn
       Timeout: 120
       MemorySize: 512
-      Environment:
-        Variables:
-          BEDROCK_REGION: !Ref AWS::Region
-          OPENSEARCH_ENDPOINT: !Sub 'https://search-nutrition-rag-dev-search-m327wc6eudd6uas5cm3gnbsz7y.${AWS::Region}.es.amazonaws.com'
       Code:
         ZipFile: |
+          const { BedrockRuntimeClient, InvokeModelCommand } = require('@aws-sdk/client-bedrock-runtime');
+
+          const bedrock = new BedrockRuntimeClient({ region: 'us-east-1' });
+
           exports.handler = async (event) => {
-            return {
-              statusCode: 200,
-              recipe: {
-                recipeName: "Placeholder Recipe",
-                ingredients: ["ingredient1", "ingredient2"],
-                instructions: ["step1", "step2"],
-                nutrition: { calories: 300 }
+              try {
+                  const { sessionId, profile } = event;
+                  
+                  const prompt = `당신은 전문 영양사입니다. 다음 조건에 맞는 레시피를 JSON 형식으로 생성해주세요:
+
+          사용자 프로필:
+          - 타겟: ${profile?.target || 'general'}
+          - 건강 상태: ${profile?.healthConditions?.join(', ') || '없음'}
+          - 알레르기: ${profile?.allergies?.join(', ') || '없음'}
+          - 요리 실력: ${profile?.cookingLevel || '초급'}
+          - 예산: ${profile?.budget || 20000}원
+
+          응답 형식:
+          {
+            "recipeName": "레시피명",
+            "description": "레시피 설명", 
+            "cookingTime": 30,
+            "difficulty": "easy",
+            "servings": 2,
+            "ingredients": [
+              {"name": "재료명", "amount": "1", "unit": "개"}
+            ],
+            "instructions": [
+              "1. 조리 단계"
+            ],
+            "nutrition": {
+              "calories": 400,
+              "protein": 25,
+              "fat": 15,
+              "carbs": 30
+            }
+          }`;
+                  
+                  const command = new InvokeModelCommand({
+                      modelId: 'anthropic.claude-opus-4-1-20250805-v1:0',
+                      body: JSON.stringify({
+                          anthropic_version: 'bedrock-2023-05-31',
+                          max_tokens: 4000,
+                          messages: [{ role: 'user', content: prompt }]
+                      })
+                  });
+                  
+                  const response = await bedrock.send(command);
+                  const result = JSON.parse(new TextDecoder().decode(response.body));
+                  
+                  const recipeText = result.content[0].text;
+                  const recipe = JSON.parse(recipeText);
+                  
+                  return {
+                      statusCode: 200,
+                      body: {
+                          recipe: recipe,
+                          generatedAt: new Date().toISOString()
+                      }
+                  };
+                  
+              } catch (error) {
+                  console.error('Recipe generation error:', error);
+                  return {
+                      statusCode: 500,
+                      body: {
+                          error: error.message,
+                          recipe: {
+                              recipeName: '기본 레시피',
+                              description: '기본 레시피입니다',
+                              cookingTime: 20,
+                              difficulty: 'easy',
+                              servings: 2,
+                              ingredients: [{ name: '기본 재료', amount: '1', unit: '개' }],
+                              instructions: ['1. 기본 조리법'],
+                              nutrition: { calories: 300, protein: 20, fat: 10, carbs: 25 }
+                          }
+                      }
+                  };
               }
-            };
           };
 
 Outputs:
   RecipeLambdaArn:
-    Description: Recipe Lambda Function ARN
+    Description: 'Recipe Lambda Function ARN'
     Value: !GetAtt RecipeLambda.Arn
     Export:
       Name: !Sub '${AWS::StackName}-RecipeLambdaArn'
+      
+  RecipeLambdaName:
+    Description: 'Recipe Lambda Function Name'
+    Value: !Ref RecipeLambda
+    Export:
+      Name: !Sub '${AWS::StackName}-RecipeLambdaName'

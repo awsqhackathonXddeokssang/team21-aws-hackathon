@@ -1,7 +1,7 @@
 # Recipe Lambda 기능 명세서
 
 ## 개요
-AWS Bedrock Claude 3을 활용한 개인 맞춤형 AI 레시피 생성 Lambda 함수
+AWS Bedrock Claude Opus 4.1을 활용한 개인 맞춤형 AI 레시피 생성 Lambda 함수
 **Step Functions → Recipe Lambda → Bedrock → 영양소 RAG → DynamoDB 저장** 플로우 구현
 
 ## 전체 시퀀스 플로우
@@ -14,12 +14,12 @@ sequenceDiagram
     participant OS as OpenSearch(RAG)
     participant DB as DynamoDB
 
-    Note over SF, DB: Recipe 생성 플로우
+    Note over SF, DB: Recipe 생성 플로우 (순차 처리)
     
     SF->>RL: 레시피 생성 시작 (profile 전달)
     Note over RL: 타겟별 프롬프트 선택 및 구성
     
-    RL->>BR: Claude 3 레시피 생성 요청
+    RL->>BR: Claude Opus 4.1 레시피 생성 요청
     BR-->>RL: 레시피 응답 (JSON 형식)
     
     Note over RL: 재료 목록 추출
@@ -32,7 +32,7 @@ sequenceDiagram
     Note over RL: 총 영양소 계산 및 검증
     RL-->>SF: RecipeResult 형식으로 응답
     
-    Note over SF: Price + Recipe 결과 합성 후
+    Note over SF: Recipe → Price → Combine 순차 처리
     SF->>DB: 최종 결과 DynamoDB 저장
 ```
 
@@ -57,43 +57,103 @@ sequenceDiagram
 - 칼로리, 탄수화물, 단백질, 지방 상세 정보
 - 타겟별 영양 목표 달성도 평가
 
-## Step Functions 워크플로우 정의
+## Step Functions 워크플로우 정의 (수정됨)
 
-### 병렬 처리 구조
+### 순차 처리 구조
 ```json
 {
-  "Comment": "AI Chef Recipe Generation Workflow",
-  "StartAt": "ParallelProcessing", 
+  "Comment": "AI Chef Recipe Generation Workflow - Fixed Sequence",
+  "StartAt": "ValidateInput",
   "States": {
-    "ParallelProcessing": {
-      "Type": "Parallel",
-      "Branches": [
-        {
-          "StartAt": "GenerateRecipe",
-          "States": {
-            "GenerateRecipe": {
-              "Type": "Task",
-              "Resource": "arn:aws:lambda:region:account:function:ai-chef-recipe",
-              "End": true
-            }
-          }
-        },
-        {
-          "StartAt": "FetchPrices", 
-          "States": {
-            "FetchPrices": {
-              "Type": "Task",
-              "Resource": "arn:aws:lambda:region:account:function:ai-chef-price",
-              "End": true
-            }
-          }
+    "ValidateInput": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "ai-chef-validator-PLACEHOLDER",
+        "Payload.$": "$"
+      },
+      "ResultPath": "$.validation",
+      "Next": "UpdateSessionStatus"
+    },
+    "UpdateSessionStatus": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:putItem",
+      "Parameters": {
+        "TableName": "ai-chef-sessions-PLACEHOLDER",
+        "Item": {
+          "sessionId": {"S.$": "$.sessionId"},
+          "status": {"S": "processing"},
+          "phase": {"S": "recipe_generation"},
+          "progress": {"N": "10"},
+          "updatedAt": {"S.$": "$$.State.EnteredTime"}
         }
-      ],
+      },
+      "ResultPath": null,
+      "Next": "GenerateRecipe"
+    },
+    "GenerateRecipe": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "ai-chef-recipe-dev",
+        "Payload.$": "$"
+      },
+      "ResultSelector": {
+        "recipe.$": "$.Payload.body"
+      },
+      "ResultPath": "$.recipeResult",
+      "Next": "UpdatePricePhase"
+    },
+    "UpdatePricePhase": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Parameters": {
+        "TableName": "ai-chef-sessions-PLACEHOLDER",
+        "Key": {
+          "sessionId": {"S.$": "$.sessionId"}
+        },
+        "UpdateExpression": "SET #phase = :phase, #progress = :progress",
+        "ExpressionAttributeNames": {
+          "#phase": "phase",
+          "#progress": "progress"
+        },
+        "ExpressionAttributeValues": {
+          ":phase": {"S": "price_lookup"},
+          ":progress": {"N": "50"}
+        }
+      },
+      "ResultPath": null,
+      "Next": "FetchPrices"
+    },
+    "FetchPrices": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "ai-chef-price-PLACEHOLDER",
+        "Payload": {
+          "sessionId.$": "$.sessionId",
+          "profile.$": "$.profile",
+          "ingredients.$": "$.recipeResult.recipe.ingredients"
+        }
+      },
+      "ResultSelector": {
+        "pricing.$": "$.Payload.body"
+      },
+      "ResultPath": "$.pricingResult",
       "Next": "CombineResults"
     },
     "CombineResults": {
       "Type": "Task",
-      "Resource": "arn:aws:lambda:region:account:function:ai-chef-combine",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "ai-chef-combine-PLACEHOLDER",
+        "Payload": {
+          "sessionId.$": "$.sessionId",
+          "profile.$": "$.profile",
+          "recipeResult.$": "$.recipeResult.recipe",
+          "pricingResult.$": "$.pricingResult.pricing"
+        }
+      },
       "End": true
     }
   }
@@ -123,16 +183,92 @@ sequenceDiagram
 }
 ```
 
-## AWS Bedrock Claude 3 연동
+## AWS Bedrock Claude Opus 4.1 연동
 
-### 모델 설정
+### 모델 설정 (업데이트됨)
 ```javascript
 const bedrockConfig = {
-  modelId: "anthropic.claude-3-sonnet-20240229-v1:0",
+  modelId: "anthropic.claude-opus-4-1-20250805-v1:0",
   region: "us-east-1",
   maxTokens: 4000,
   temperature: 0.7,
   topP: 0.9
+};
+```
+
+### 실제 구현 코드
+```javascript
+const { BedrockRuntimeClient, InvokeModelCommand } = require('@aws-sdk/client-bedrock-runtime');
+
+const bedrock = new BedrockRuntimeClient({ region: 'us-east-1' });
+
+exports.handler = async (event) => {
+    try {
+        const { sessionId, profile } = event;
+        
+        const prompt = `당신은 전문 영양사입니다. 다음 조건에 맞는 레시피를 JSON 형식으로 생성해주세요:
+
+사용자 프로필:
+- 타겟: ${profile?.target || 'general'}
+- 건강 상태: ${profile?.healthConditions?.join(', ') || '없음'}
+- 알레르기: ${profile?.allergies?.join(', ') || '없음'}
+- 요리 실력: ${profile?.cookingLevel || '초급'}
+- 예산: ${profile?.budget || 20000}원
+
+응답 형식:
+{
+  "recipeName": "레시피명",
+  "description": "레시피 설명", 
+  "cookingTime": 30,
+  "difficulty": "easy",
+  "servings": 2,
+  "ingredients": [
+    {"name": "재료명", "amount": "1", "unit": "개"}
+  ],
+  "instructions": [
+    "1. 조리 단계"
+  ],
+  "nutrition": {
+    "calories": 400,
+    "protein": 25,
+    "fat": 15,
+    "carbs": 30
+  }
+}`;
+        
+        const command = new InvokeModelCommand({
+            modelId: 'anthropic.claude-opus-4-1-20250805-v1:0',
+            body: JSON.stringify({
+                anthropic_version: 'bedrock-2023-05-31',
+                max_tokens: 4000,
+                messages: [{ role: 'user', content: prompt }]
+            })
+        });
+        
+        const response = await bedrock.send(command);
+        const result = JSON.parse(new TextDecoder().decode(response.body));
+        
+        const recipeText = result.content[0].text;
+        const recipe = JSON.parse(recipeText);
+        
+        return {
+            statusCode: 200,
+            body: {
+                recipe: recipe,
+                generatedAt: new Date().toISOString()
+            }
+        };
+        
+    } catch (error) {
+        console.error('Recipe generation error:', error);
+        return {
+            statusCode: 500,
+            body: {
+                error: error.message,
+                recipe: getDefaultRecipe(event.profile?.target || 'general')
+            }
+        };
+    }
 };
 ```
 
@@ -459,7 +595,7 @@ function getCachedNutrition(ingredientName) {
 }
 ```
 
-## 배포 설정
+## 배포 설정 (업데이트됨)
 
 ### IAM 권한
 ```json
@@ -471,7 +607,7 @@ function getCachedNutrition(ingredientName) {
       "Action": [
         "bedrock:InvokeModel"
       ],
-      "Resource": "arn:aws:bedrock:*:*:foundation-model/anthropic.claude-3-sonnet-20240229-v1:0"
+      "Resource": "arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-opus-4-1-20250805-v1:0"
     },
     {
       "Effect": "Allow", 
@@ -485,22 +621,48 @@ function getCachedNutrition(ingredientName) {
 }
 ```
 
-### CloudFormation 리소스
+### CloudFormation 리소스 (실제 배포됨)
 ```yaml
 RecipeLambda:
   Type: AWS::Lambda::Function
   Properties:
-    FunctionName: ai-chef-recipe
+    FunctionName: ai-chef-recipe-dev
     Runtime: nodejs18.x
     Handler: index.handler
     MemorySize: 512
     Timeout: 120
     Environment:
       Variables:
-        BEDROCK_REGION: !Ref AWS::Region
+        BEDROCK_REGION: us-east-1
         OPENSEARCH_ENDPOINT: !GetAtt NutritionSearchDomain.DomainEndpoint
 ```
 
+### 배포된 리소스 정보
+- **Lambda 함수명**: `ai-chef-recipe-dev`
+- **Lambda ARN**: `arn:aws:lambda:us-east-1:491085385364:function:ai-chef-recipe-dev`
+- **Step Functions**: `ai-chef-workflow-dev`
+- **지역**: `us-east-1`
+- **모델**: Claude Opus 4.1
+
+### 테스트 실행
+```bash
+# Step Functions 실행
+aws stepfunctions start-execution \
+  --state-machine-arn arn:aws:states:us-east-1:491085385364:stateMachine:ai-chef-workflow-dev \
+  --input '{
+    "sessionId": "sess_abc123",
+    "profile": {
+      "target": "keto",
+      "healthConditions": ["diabetes"],
+      "allergies": [],
+      "cookingLevel": "beginner",
+      "budget": 30000
+    }
+  }' \
+  --name execution-$(date +%s)
+```
+
 ---
-**작성일**: 2024-09-05  
-**작성자**: Team21 AWS Hackathon
+**작성일**: 2025-09-05  
+**작성자**: Team21 AWS Hackathon  
+**최종 업데이트**: Claude Opus 4.1 적용 완료

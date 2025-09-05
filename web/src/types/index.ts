@@ -15,7 +15,11 @@ export interface TargetInfo {
 export interface Ingredient {
   name: string;
   amount: string;
-  prices: Array<{vendor: string; price: number}>;
+  unit?: string;
+  price?: number;
+  store?: string;
+  url?: string;
+  prices?: Array<{vendor: string; price: number; url?: string}>;
 }
 
 // 영양 정보
@@ -27,6 +31,9 @@ export interface NutritionInfo {
   fiber?: number;
   sugar?: number;
   sodium?: number;
+  carbsPercent?: number;    // ChatScreen에서 사용
+  proteinPercent?: number;  // ChatScreen에서 사용
+  fatPercent?: number;      // ChatScreen에서 사용
 }
 
 // 레시피 정보
@@ -80,8 +87,17 @@ export interface ChatMessage {
 export interface ApiResponse<T> {
   success: boolean;
   data?: T;
-  error?: string;
+  error?: {
+    code?: string;
+    message: string;
+    details?: any;
+  };
   message?: string;
+  metadata?: {
+    source?: string;
+    timestamp?: string;
+    processingTime?: number;
+  };
 }
 
 // 세션 정보
