@@ -14,10 +14,13 @@ export default function ChatScreen() {
   const [currentRecipe, setCurrentRecipe] = useState<Recipe | null>(null);
   const [showResult, setShowResult] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
+  const [additionalQuestions, setAdditionalQuestions] = useState<string[]>([]);
+  const [showTextInput, setShowTextInput] = useState(false);
 
   // 마지막 메시지 기반 선택지 표시 로직
   const lastMessage = messages[messages.length - 1];
   const shouldShowOptions = lastMessage?.messageType === 'choice' && lastMessage?.options;
+  const shouldShowTextInput = lastMessage?.messageType === 'text_input';
 
   // 초기 AI 메시지들
   useEffect(() => {
@@ -91,7 +94,24 @@ export default function ChatScreen() {
     setIsLoading(true);
 
     setTimeout(() => {
-      if (currentStep >= 2) {
+      if (currentStep >= 3) {
+        // 추가 질문 단계 처리
+        if (option === '네, 질문이 있어요') {
+          const textInputMessage: ChatMessage = {
+            id: `ai-text-input-${Date.now()}`,
+            type: 'ai',
+            content: '궁금한 점을 자유롭게 입력해주세요!',
+            timestamp: new Date(),
+            messageType: 'text_input'
+          };
+          setMessages(prev => [...prev, textInputMessage]);
+          setShowTextInput(true);
+        } else if (option === '아니요, 충분해요') {
+          // 제출하기 단계로
+          handleSubmitProfile();
+        }
+        setIsLoading(false);
+      } else if (currentStep >= 2) {
         // 레시피 생성
         generateRecipe();
       } else {
@@ -121,21 +141,69 @@ export default function ChatScreen() {
       {
         question: '어떤 맛을 선호하시나요?',
         options: ['담백한 맛', '매콤한 맛', '달콤한 맛', '진한 맛']
+      },
+      {
+        question: '추가로 궁금한 점이나 특별한 요청사항이 있으신가요?',
+        options: ['네, 질문이 있어요', '아니요, 충분해요']
       }
     ];
     return questions[currentStep - 1] || questions[0];
   };
 
-  const generateRecipe = async () => {
-    try {
-      const recipe = await MockApiService.generateRecipe(selectedTarget!, '맞춤 레시피');
-      setCurrentRecipe(recipe);
-      setShowResult(true);
+  const handleTextInput = async (inputText: string) => {
+    // 사용자 입력 메시지 추가
+    const userMessage: ChatMessage = {
+      id: `user-text-${Date.now()}`,
+      type: 'user',
+      content: inputText,
+      timestamp: new Date()
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setAdditionalQuestions(prev => [...prev, inputText]);
+    setShowTextInput(false);
+    setIsLoading(true);
+
+    setTimeout(() => {
+      // Mock AI 응답
+      const aiResponse: ChatMessage = {
+        id: `ai-response-${Date.now()}`,
+        type: 'ai',
+        content: '네, 알겠습니다! 레시피에 반영하겠어요.',
+        timestamp: new Date()
+      };
+
+      // 다시 추가 질문 물어보기
+      const nextQuestion: ChatMessage = {
+        id: `ai-additional-${Date.now()}`,
+        type: 'ai',
+        content: '또 다른 질문이나 요청사항이 있으신가요?',
+        timestamp: new Date(),
+        messageType: 'choice',
+        options: ['네, 더 있어요', '아니요, 이제 충분해요']
+      };
+
+      setMessages(prev => [...prev, aiResponse, nextQuestion]);
       setIsLoading(false);
-    } catch (error) {
-      console.error('Error:', error);
-      setIsLoading(false);
-    }
+    }, 1000);
+  };
+
+  const handleSubmitProfile = async () => {
+    const submitMessage: ChatMessage = {
+      id: `ai-submit-${Date.now()}`,
+      type: 'ai',
+      content: '프로필이 완성되었습니다! 맞춤 레시피를 생성하고 최저가 정보를 찾고 있어요... 🍳',
+      timestamp: new Date()
+    };
+
+    setMessages(prev => [...prev, submitMessage]);
+    
+    // TODO: Phase 3 - 백엔드로 프로필 제출
+    console.log('프로필 제출:', {
+      target: selectedTarget,
+      additionalQuestions,
+      // 기타 수집된 정보들
+    });
   };
 
   const getTargetResponseMessage = (target: UserTarget): string => {
@@ -239,6 +307,43 @@ export default function ChatScreen() {
                     <span className="text-xs font-bold text-gray-800">{option}</span>
                   </button>
                 ))}
+              </div>
+            </div>
+          </div>
+        {/* 텍스트 입력 UI */}
+        {shouldShowTextInput && !isLoading && (
+          <div className="flex justify-start ml-2">
+            <div className="w-full">
+              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                <textarea
+                  placeholder="궁금한 점이나 특별한 요청사항을 입력해주세요..."
+                  className="w-full h-24 p-3 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      const text = e.currentTarget.value.trim();
+                      if (text) {
+                        handleTextInput(text);
+                        e.currentTarget.value = '';
+                      }
+                    }
+                  }}
+                />
+                <div className="flex justify-end mt-2 space-x-2">
+                  <button
+                    onClick={() => {
+                      const textarea = document.querySelector('textarea');
+                      const text = textarea?.value.trim();
+                      if (text) {
+                        handleTextInput(text);
+                        textarea.value = '';
+                      }
+                    }}
+                    className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors duration-200 text-sm font-medium"
+                  >
+                    전송
+                  </button>
+                </div>
               </div>
             </div>
           </div>

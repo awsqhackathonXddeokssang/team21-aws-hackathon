@@ -59,9 +59,10 @@ export interface ChatMessage {
   content: string;
   timestamp: Date;
   isTyping?: boolean;
-  messageType?: 'text' | 'choice' | 'ingredients';
+  messageType?: 'text' | 'choice' | 'ingredients' | 'additional_question' | 'text_input';
   options?: string[];
   selectedOption?: string;
+  additionalQuestions?: string[]; // 사용자가 입력한 추가 질문들
 }
 
 // API 응답
