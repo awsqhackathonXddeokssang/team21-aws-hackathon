@@ -312,12 +312,11 @@ Resources:
       - ProcessOptionsMethod
     Properties:
       RestApiId: !Ref ApiGateway
-      StageName: prod
 
 Outputs:
   ApiGatewayUrl:
     Description: 'API Gateway URL'
-    Value: !Sub 'https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod'
+    Value: !Sub 'https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com'
     Export:
       Name: !Sub '${AWS::StackName}-ApiGatewayUrl'
       
