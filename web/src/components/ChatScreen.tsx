@@ -23,7 +23,7 @@ export default function ChatScreen() {
       {
         id: 'greeting',
         type: 'ai',
-        content: '안녕하세요! AI 셰프입니다 👨‍🍳\n맞춤형 레시피를 추천해드릴게요.\n먼저 몇 가지 여쭤볼게요!',
+        content: '안녕하세요! AI 셰프입니다 👨🍳\n맞춤형 레시피를 추천해드릴게요.\n먼저 몇 가지 여쭤볼게요!',
         timestamp: new Date()
       },
       {
@@ -142,92 +142,10 @@ export default function ChatScreen() {
   };
 
   return (
-    <div className="h-full bg-gray-50 flex flex-col">
-      {/* 헤더 */}
-      <div className="flex items-center p-4 bg-white border-b border-gray-200">
-        <div className="w-10 h-10 bg-orange-500 rounded-full flex items-center justify-center">
-          <span className="text-white text-lg">👨‍🍳</span>
-        </div>
-        <div className="ml-3">
-          <h2 className="font-semibold text-gray-800 text-sm">AI 셰프</h2>
-          <p className="text-xs text-gray-500">온라인</p>
-        </div>
-      </div>
-
-      {/* 메시지 영역 */}
+    <div className="h-full bg-white flex flex-col">
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.map((message) => (
-          <div key={message.id} className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-xs px-4 py-2 rounded-2xl ${
-              message.type === 'user' 
-                ? 'bg-orange-500 text-white rounded-br-md' 
-                : 'bg-white rounded-bl-md border border-gray-200'
-            }`}>
-              <p className="text-sm whitespace-pre-line">{message.content}</p>
-            </div>
-          </div>
-        ))}
-
-        {/* 타겟 선택 버튼들 */}
-        {showTargetSelection && (
-          <div className="flex justify-start">
-            <div className="max-w-[85%] w-full">
-              <div className="grid grid-cols-2 gap-2">
-                {targetInfos.map((target, index) => (
-                  <button
-                    key={target.id}
-                    onClick={() => handleTargetSelect(target.id)}
-                    className="py-3 px-4 rounded-lg bg-gray-100 hover:bg-orange-100 hover:border-orange-300 border border-gray-300 transition-colors duration-200 text-left"
-                  >
-                    <div className="flex items-center">
-                      <span className="text-xl mr-3">{target.icon}</span>
-                      <span className="text-sm font-medium text-gray-800">{target.name}</span>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* 옵션 선택 버튼들 */}
-        {currentOptions.length > 0 && (
-          <div className="flex justify-start">
-            <div className="max-w-[85%] w-full">
-              <div className="grid grid-cols-2 gap-2">
-                {currentOptions.map((option, index) => (
-                  <button
-                    key={index}
-                    onClick={() => handleOptionSelect(option)}
-                    className="py-3 px-4 rounded-lg bg-gray-100 hover:bg-orange-100 hover:border-orange-300 border border-gray-300 transition-colors duration-200 text-left"
-                  >
-                    <span className="text-sm font-medium text-gray-800">{option}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {isLoading && (
-          <div className="flex justify-start">
-            <div className="bg-white rounded-2xl rounded-bl-md border border-gray-200 px-4 py-2">
-              <div className="flex items-center space-x-2">
-                <Loader2 className="w-4 h-4 animate-spin text-orange-500" />
-                <span className="text-sm text-gray-600">생각 중...</span>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* 메시지들만 여기에 */}
       </div>
-
-      {/* 결과 모달 */}
-      {showResult && currentRecipe && (
-        <ResultModal
-          recipe={currentRecipe}
-          onClose={() => setShowResult(false)}
-        />
-      )}
     </div>
   );
 }
