@@ -20,7 +20,9 @@ exports.handler = async (event) => {
                     recipe: event.recipeResult,
                     nutrition: event.recipeResult.nutrition || null,
                     nutritionInfo: event.recipeResult.nutritionInfo || null
-                }
+                },
+                sessionId: event.sessionId,  // sessionId 전달
+                profile: event.profile || null  // profile 전달
             };
             priceResult = { 
                 success: true, 
@@ -52,15 +54,17 @@ exports.handler = async (event) => {
             shoppingInfo: extractShoppingInfo(priceData),
             totalEstimatedCost: pricingInfo?.recommendations?.totalEstimatedCost || 0,
             
-            // 추가 메타데이터
+            // Recipe Lambda 새 정보들
             generatedAt: extractGeneratedAt(recipeData),
             recipeImage: extractRecipeImage(recipeData),
+            profile: extractProfile(recipeData),
             
             summary: {
                 recipeAvailable: !!recipeData.success,
                 pricingAvailable: !!priceData.success,
                 nutritionAvailable: !!nutritionInfo,
                 imageAvailable: !!extractRecipeImage(recipeData),
+                profileAvailable: !!extractProfile(recipeData),
                 ingredientsFound: pricingInfo?.summary?.foundIngredients || 0,
                 totalIngredients: pricingInfo?.summary?.totalIngredients || 0,
                 successRate: pricingInfo?.summary?.successRate || 0,
@@ -284,7 +288,8 @@ function parseStandardResponse(result, source) {
 }
 
 function extractSessionId(recipeData, priceData) {
-    return recipeData.data?.sessionId || 
+    // Recipe Lambda에서 sessionId 추출 (event에서 전달받은 것)
+    return recipeData.sessionId ||  // Step Functions에서 전달
            priceData.data?.metadata?.sessionId ||
            priceData.data?.sessionId || 
            `combined_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -301,10 +306,11 @@ function extractGeneratedAt(recipeData) {
 }
 
 function extractRecipeImage(recipeData) {
-    if (!recipeData.success || !recipeData.data) {
-        return null;
-    }
-    
-    const recipe = recipeData.data.body?.recipe || recipeData.data.recipe;
-    return recipe?.image || recipe?.imageUrl || null;
+    // Recipe Lambda는 현재 이미지 정보 없음, 향후 Recipe Image Generator 연동 시 사용
+    return null;
+}
+
+function extractProfile(recipeData) {
+    // Recipe Lambda에서 profile 정보 추출 (event에서 전달받은 것)
+    return recipeData.profile || null;
 }
