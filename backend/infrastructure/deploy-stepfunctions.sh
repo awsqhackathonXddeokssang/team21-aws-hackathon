@@ -2,9 +2,9 @@
 
 STACK_NAME="ai-chef-stepfunctions"
 ENVIRONMENT=${1:-dev}
-REGION=${AWS_DEFAULT_REGION:-ap-northeast-2}
+REGION="us-east-1"
 
-echo "🚀 Deploying Step Functions..."
+echo "🚀 Deploying Step Functions to ${REGION}..."
 
 aws cloudformation deploy \
   --template-file step-functions-only.yaml \

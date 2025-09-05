@@ -1,60 +1,305 @@
 {
-  "Comment": "AI Chef Recipe Recommendation Workflow",
-  "StartAt": "OrchestrateSession",
+  "Comment": "AI Chef Recipe Generation Workflow - Fixed Sequence",
+  "StartAt": "ValidateInput",
   "States": {
-    "OrchestrateSession": {
+    "ValidateInput": {
       "Type": "Task",
       "Resource": "arn:aws:states:::lambda:invoke",
       "Parameters": {
-        "FunctionName": "${OrchestratorLambdaArn}",
+        "FunctionName": "ai-chef-validator-PLACEHOLDER",
         "Payload.$": "$"
       },
-      "ResultPath": "$.sessionResult",
-      "Next": "GenerateRecipeAndPrice"
+      "ResultPath": "$.validation",
+      "Next": "UpdateSessionStatus",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "HandleValidationError",
+          "ResultPath": "$.error"
+        }
+      ]
     },
-    "GenerateRecipeAndPrice": {
-      "Type": "Parallel",
-      "Branches": [
+    
+    "UpdateSessionStatus": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:putItem",
+      "Parameters": {
+        "TableName": "ai-chef-sessions-PLACEHOLDER",
+        "Item": {
+          "sessionId": {"S.$": "$.sessionId"},
+          "status": {"S": "processing"},
+          "phase": {"S": "recipe_generation"},
+          "progress": {"N": "10"},
+          "updatedAt": {"S.$": "$$.State.EnteredTime"}
+        }
+      },
+      "ResultPath": null,
+      "Next": "GenerateRecipe"
+    },
+    
+    "GenerateRecipe": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "ai-chef-recipe-PLACEHOLDER",
+        "Payload.$": "$"
+      },
+      "ResultSelector": {
+        "recipe.$": "$.Payload.body"
+      },
+      "ResultPath": "$.recipeResult",
+      "Retry": [
         {
-          "StartAt": "GenerateRecipe",
-          "States": {
-            "GenerateRecipe": {
-              "Type": "Task",
-              "Resource": "arn:aws:states:::lambda:invoke",
-              "Parameters": {
-                "FunctionName": "${RecipeLambdaArn}",
-                "Payload.$": "$"
-              },
-              "End": true
-            }
-          }
-        },
-        {
-          "StartAt": "GetPriceInfo",
-          "States": {
-            "GetPriceInfo": {
-              "Type": "Task",
-              "Resource": "arn:aws:states:::lambda:invoke",
-              "Parameters": {
-                "FunctionName": "${PriceLambdaArn}",
-                "Payload.$": "$"
-              },
-              "End": true
-            }
-          }
+          "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2.0
         }
       ],
-      "ResultPath": "$.parallelResults",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "RecipeGenerationFailed",
+          "ResultPath": "$.error"
+        }
+      ],
+      "Next": "UpdatePricePhase"
+    },
+    
+    "UpdatePricePhase": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Parameters": {
+        "TableName": "ai-chef-sessions-PLACEHOLDER",
+        "Key": {
+          "sessionId": {"S.$": "$.sessionId"}
+        },
+        "UpdateExpression": "SET #phase = :phase, #progress = :progress, #updatedAt = :updatedAt",
+        "ExpressionAttributeNames": {
+          "#phase": "phase",
+          "#progress": "progress",
+          "#updatedAt": "updatedAt"
+        },
+        "ExpressionAttributeValues": {
+          ":phase": {"S": "price_lookup"},
+          ":progress": {"N": "50"},
+          ":updatedAt": {"S.$": "$$.State.EnteredTime"}
+        }
+      },
+      "ResultPath": null,
+      "Next": "FetchPrices"
+    },
+    
+    "FetchPrices": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "ai-chef-price-PLACEHOLDER",
+        "Payload": {
+          "sessionId.$": "$.sessionId",
+          "profile.$": "$.profile",
+          "ingredients.$": "$.recipeResult.recipe.ingredients"
+        }
+      },
+      "ResultSelector": {
+        "pricing.$": "$.Payload.body"
+      },
+      "ResultPath": "$.pricingResult",
+      "Retry": [
+        {
+          "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "PriceFetchingFailed",
+          "ResultPath": "$.error"
+        }
+      ],
+      "Next": "UpdateCombinePhase"
+    },
+    
+    "UpdateCombinePhase": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Parameters": {
+        "TableName": "ai-chef-sessions-PLACEHOLDER",
+        "Key": {
+          "sessionId": {"S.$": "$.sessionId"}
+        },
+        "UpdateExpression": "SET #phase = :phase, #progress = :progress, #updatedAt = :updatedAt",
+        "ExpressionAttributeNames": {
+          "#phase": "phase",
+          "#progress": "progress",
+          "#updatedAt": "updatedAt"
+        },
+        "ExpressionAttributeValues": {
+          ":phase": {"S": "combining_results"},
+          ":progress": {"N": "80"},
+          ":updatedAt": {"S.$": "$$.State.EnteredTime"}
+        }
+      },
+      "ResultPath": null,
       "Next": "CombineResults"
     },
+    
     "CombineResults": {
       "Type": "Task",
       "Resource": "arn:aws:states:::lambda:invoke",
       "Parameters": {
-        "FunctionName": "${CombineLambdaArn}",
-        "Payload.$": "$"
+        "FunctionName": "ai-chef-combine-PLACEHOLDER",
+        "Payload": {
+          "sessionId.$": "$.sessionId",
+          "profile.$": "$.profile",
+          "recipeResult.$": "$.recipeResult.recipe",
+          "pricingResult.$": "$.pricingResult.pricing"
+        }
       },
+      "ResultSelector": {
+        "combinedResult.$": "$.Payload.body"
+      },
+      "ResultPath": "$.finalResult",
+      "Retry": [
+        {
+          "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException"],
+          "IntervalSeconds": 1,
+          "MaxAttempts": 2,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Next": "SaveFinalResults"
+    },
+    
+    "SaveFinalResults": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:putItem",
+      "Parameters": {
+        "TableName": "ai-chef-results-PLACEHOLDER",
+        "Item": {
+          "sessionId": {"S.$": "$.sessionId"},
+          "createdAt": {"S.$": "$$.State.EnteredTime"},
+          "result": {"S.$": "States.JsonToString($.finalResult.combinedResult)"},
+          "ttl": {"N": "1735689600"}
+        }
+      },
+      "ResultPath": null,
+      "Next": "UpdateCompletionStatus"
+    },
+    
+    "UpdateCompletionStatus": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Parameters": {
+        "TableName": "ai-chef-sessions-PLACEHOLDER",
+        "Key": {
+          "sessionId": {"S.$": "$.sessionId"}
+        },
+        "UpdateExpression": "SET #status = :status, #phase = :phase, #progress = :progress, #result = :result, #updatedAt = :updatedAt",
+        "ExpressionAttributeNames": {
+          "#status": "status",
+          "#phase": "phase",
+          "#progress": "progress",
+          "#result": "result",
+          "#updatedAt": "updatedAt"
+        },
+        "ExpressionAttributeValues": {
+          ":status": {"S": "completed"},
+          ":phase": {"S": "finished"},
+          ":progress": {"N": "100"},
+          ":result": {"S.$": "States.JsonToString($.finalResult.combinedResult)"},
+          ":updatedAt": {"S.$": "$$.State.EnteredTime"}
+        }
+      },
+      "ResultPath": null,
+      "Next": "SendNotification"
+    },
+    
+    "SendNotification": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "ai-chef-notification-PLACEHOLDER",
+        "Payload": {
+          "sessionId.$": "$.sessionId",
+          "status": "completed",
+          "result.$": "$.finalResult.combinedResult"
+        }
+      },
+      "ResultPath": null,
       "End": true
+    },
+    
+    "RecipeGenerationFailed": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Parameters": {
+        "TableName": "ai-chef-sessions-PLACEHOLDER",
+        "Key": {
+          "sessionId": {"S.$": "$.sessionId"}
+        },
+        "UpdateExpression": "SET #status = :status, #error = :error, #updatedAt = :updatedAt",
+        "ExpressionAttributeNames": {
+          "#status": "status",
+          "#error": "error",
+          "#updatedAt": "updatedAt"
+        },
+        "ExpressionAttributeValues": {
+          ":status": {"S": "failed"},
+          ":error": {"S": "Recipe generation failed"},
+          ":updatedAt": {"S.$": "$$.State.EnteredTime"}
+        }
+      },
+      "Next": "RecipeFailEnd"
+    },
+    
+    "PriceFetchingFailed": {
+      "Type": "Pass",
+      "Result": {
+        "pricing": {
+          "error": "Price fetching failed",
+          "fallback": true,
+          "ingredients": []
+        }
+      },
+      "ResultPath": "$.pricingResult",
+      "Next": "UpdateCombinePhase"
+    },
+    
+    "HandleValidationError": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Parameters": {
+        "TableName": "ai-chef-sessions-PLACEHOLDER",
+        "Key": {
+          "sessionId": {"S.$": "$.sessionId"}
+        },
+        "UpdateExpression": "SET #status = :status, #error = :error, #updatedAt = :updatedAt",
+        "ExpressionAttributeNames": {
+          "#status": "status",
+          "#error": "error",
+          "#updatedAt": "updatedAt"
+        },
+        "ExpressionAttributeValues": {
+          ":status": {"S": "failed"},
+          ":error": {"S.$": "States.JsonToString($.error)"},
+          ":updatedAt": {"S.$": "$$.State.EnteredTime"}
+        }
+      },
+      "Next": "ValidationErrorEnd"
+    },
+    
+    "RecipeFailEnd": {
+      "Type": "Fail",
+      "Cause": "Recipe generation failed"
+    },
+    
+    "ValidationErrorEnd": {
+      "Type": "Fail",
+      "Cause": "Input validation failed"
     }
   }
 }

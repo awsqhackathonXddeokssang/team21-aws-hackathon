@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'AI Chef Step Functions State Machine Only'
+Description: 'AI Chef Step Functions - Fixed Workflow Sequence'
 
 Parameters:
   Environment:
@@ -7,6 +7,37 @@ Parameters:
     Default: dev
 
 Resources:
+  # DynamoDB Tables
+  SessionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'ai-chef-sessions-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: sessionId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: sessionId
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+
+  ResultsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'ai-chef-results-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: sessionId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: sessionId
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+
   # Step Functions Execution Role
   StepFunctionsRole:
     Type: AWS::IAM::Role
@@ -36,15 +67,17 @@ Resources:
                   - dynamodb:GetItem
                   - dynamodb:PutItem
                   - dynamodb:UpdateItem
-                Resource: '*'
+                Resource:
+                  - !GetAtt SessionsTable.Arn
+                  - !GetAtt ResultsTable.Arn
 
-  # Step Functions State Machine
+  # Step Functions State Machine with Fixed Sequence
   RecipeWorkflowStateMachine:
     Type: AWS::StepFunctions::StateMachine
     Properties:
-      StateMachineName: !Sub 'ai-chef-workflow-${Environment}'
+      StateMachineName: !Sub 'ai-chef-workflow-fixed-${Environment}'
       RoleArn: !GetAtt StepFunctionsRole.Arn
-      DefinitionString: |
+      DefinitionString: !Sub |
         {
           "Comment": "AI Chef Recipe Generation Workflow - Fixed Sequence",
           "StartAt": "ValidateInput",
@@ -70,7 +103,7 @@ Resources:
               "Type": "Task",
               "Resource": "arn:aws:states:::dynamodb:putItem",
               "Parameters": {
-                "TableName": "ai-chef-sessions-PLACEHOLDER",
+                "TableName": "${SessionsTable}",
                 "Item": {
                   "sessionId": {"S.$": "$.sessionId"},
                   "status": {"S": "processing"},
@@ -114,7 +147,7 @@ Resources:
               "Type": "Task",
               "Resource": "arn:aws:states:::dynamodb:updateItem",
               "Parameters": {
-                "TableName": "ai-chef-sessions-PLACEHOLDER",
+                "TableName": "${SessionsTable}",
                 "Key": {
                   "sessionId": {"S.$": "$.sessionId"}
                 },
@@ -187,7 +220,7 @@ Resources:
               "Type": "Task",
               "Resource": "arn:aws:states:::dynamodb:putItem",
               "Parameters": {
-                "TableName": "ai-chef-results-PLACEHOLDER",
+                "TableName": "${ResultsTable}",
                 "Item": {
                   "sessionId": {"S.$": "$.sessionId"},
                   "createdAt": {"S.$": "$$.State.EnteredTime"},
@@ -202,7 +235,7 @@ Resources:
               "Type": "Task",
               "Resource": "arn:aws:states:::dynamodb:updateItem",
               "Parameters": {
-                "TableName": "ai-chef-sessions-PLACEHOLDER",
+                "TableName": "${SessionsTable}",
                 "Key": {
                   "sessionId": {"S.$": "$.sessionId"}
                 },
@@ -225,23 +258,11 @@ Resources:
               "ResultPath": null,
               "End": true
             },
-            "PriceFetchingFailed": {
-              "Type": "Pass",
-              "Result": {
-                "pricing": {
-                  "error": "Price fetching failed",
-                  "fallback": true,
-                  "ingredients": []
-                }
-              },
-              "ResultPath": "$.pricingResult",
-              "Next": "CombineResults"
-            },
             "RecipeGenerationFailed": {
               "Type": "Task",
               "Resource": "arn:aws:states:::dynamodb:updateItem",
               "Parameters": {
-                "TableName": "ai-chef-sessions-PLACEHOLDER",
+                "TableName": "${SessionsTable}",
                 "Key": {
                   "sessionId": {"S.$": "$.sessionId"}
                 },
@@ -259,42 +280,44 @@ Resources:
               },
               "Next": "RecipeFailEnd"
             },
-            "HandleValidationError": {
-              "Type": "Task",
-              "Resource": "arn:aws:states:::dynamodb:updateItem",
-              "Parameters": {
-                "TableName": "ai-chef-sessions-PLACEHOLDER",
-                "Key": {
-                  "sessionId": {"S.$": "$.sessionId"}
-                },
-                "UpdateExpression": "SET #status = :status, #error = :error, #updatedAt = :updatedAt",
-                "ExpressionAttributeNames": {
-                  "#status": "status",
-                  "#error": "error",
-                  "#updatedAt": "updatedAt"
-                },
-                "ExpressionAttributeValues": {
-                  ":status": {"S": "failed"},
-                  ":error": {"S.$": "States.JsonToString($.error)"},
-                  ":updatedAt": {"S.$": "$$.State.EnteredTime"}
+            "PriceFetchingFailed": {
+              "Type": "Pass",
+              "Result": {
+                "pricing": {
+                  "error": "Price fetching failed",
+                  "fallback": true,
+                  "ingredients": []
                 }
               },
-              "Next": "ValidationErrorEnd"
+              "ResultPath": "$.pricingResult",
+              "Next": "CombineResults"
+            },
+            "HandleValidationError": {
+              "Type": "Fail",
+              "Cause": "Input validation failed"
             },
             "RecipeFailEnd": {
               "Type": "Fail",
               "Cause": "Recipe generation failed"
-            },
-            "ValidationErrorEnd": {
-              "Type": "Fail",
-              "Cause": "Input validation failed"
             }
           }
         }
 
 Outputs:
   StateMachineArn:
-    Description: 'Step Functions State Machine ARN'
+    Description: 'Fixed Step Functions State Machine ARN'
     Value: !Ref RecipeWorkflowStateMachine
     Export:
       Name: !Sub '${AWS::StackName}-StateMachineArn'
+  
+  SessionsTableName:
+    Description: 'Sessions DynamoDB Table Name'
+    Value: !Ref SessionsTable
+    Export:
+      Name: !Sub '${AWS::StackName}-SessionsTable'
+      
+  ResultsTableName:
+    Description: 'Results DynamoDB Table Name'
+    Value: !Ref ResultsTable
+    Export:
+      Name: !Sub '${AWS::StackName}-ResultsTable'

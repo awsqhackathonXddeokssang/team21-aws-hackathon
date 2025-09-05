@@ -3,32 +3,48 @@
 ## 개요
 AI Chef 레시피 생성을 위한 AWS Step Functions 워크플로우 정의
 
-## 워크플로우 아키텍처
+## 워크플로우 아키텍처 (수정됨)
 
 ```mermaid
 graph TD
     A[Start] --> B[Input Validation]
     B --> C[Update Session Status]
-    C --> D[Parallel Processing]
+    C --> D[Generate Recipe]
     
-    D --> E[Recipe Generation Branch]
-    D --> F[Price Fetching Branch]
+    D --> E[Update Price Phase]
+    E --> F[Fetch Prices with Recipe Ingredients]
     
-    E --> G[Recipe Lambda]
-    F --> H[Price Lambda]
+    F --> G[Combine Results]
+    G --> H[Save Final Results]
+    H --> I[Update Completion Status]
+    I --> J[End]
     
-    G --> I[Combine Results]
-    H --> I
+    B --> K[Validation Failed]
+    K --> L[Handle Validation Error]
+    L --> M[End with Error]
     
-    I --> J[Combine Lambda]
-    J --> K[Update Final Results]
-    K --> L[Send Notification]
-    L --> M[End]
+    D --> N[Recipe Generation Failed]
+    N --> O[Recipe Fail End]
     
-    B --> N[Validation Failed]
-    N --> O[Error Handler]
-    O --> P[End with Error]
+    F --> P[Price Fetching Failed]
+    P --> G[Continue with Fallback]
 ```
+
+## 핵심 변경사항
+
+### 1. 순차 처리로 변경
+- **기존**: Recipe와 Price를 병렬 처리
+- **수정**: Recipe 먼저 생성 → 재료 목록 추출 → Price 조회
+
+### 2. 진행 상태 세분화
+- 10%: 레시피 생성 시작
+- 50%: 가격 조회 시작  
+- 80%: 결과 결합 시작
+- 100%: 완료
+
+### 3. 에러 핸들링 개선
+- 가격 조회 실패 시 fallback으로 계속 진행
+- 레시피 생성 실패 시 전체 워크플로우 중단
 
 ## Step Functions 정의 파일
 

@@ -15,10 +15,7 @@ export interface TargetInfo {
 export interface Ingredient {
   name: string;
   amount: string;
-  unit: string;
-  price: number;
-  store: string;
-  url: string;
+  prices: Array<{vendor: string; price: number}>;
 }
 
 // 영양 정보
