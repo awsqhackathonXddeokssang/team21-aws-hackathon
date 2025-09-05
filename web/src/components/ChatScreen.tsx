@@ -28,6 +28,8 @@ export default function ChatScreen() {
   const [progress, setProgress] = useState(0);
   const [progressMessage, setProgressMessage] = useState('');
   const [pollCount, setPollCount] = useState(0);
+  const [sessionError, setSessionError] = useState(false);
+  const [sessionRetryCount, setSessionRetryCount] = useState(0);
 
   // 자동 스크롤을 위한 ref
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -151,13 +153,26 @@ export default function ChatScreen() {
         
         console.log('💾 SessionId 저장 완료:', sessionData.sessionId);
         console.log('💾 로컬 스토리지 저장 완료');
+        
+        // 세션 생성 성공 시 에러 상태 초기화
+        setSessionError(false);
+        setSessionRetryCount(0);
       } catch (error) {
         console.error('❌ 세션 초기화 실패:', error);
-        // Fallback: 임시 세션 ID 생성
-        const fallbackId = `temp-${Date.now()}`;
-        setSessionId(fallbackId);
-        localStorage.setItem('sessionId', fallbackId);
-        console.log('🔄 Fallback session created:', fallbackId);
+        setSessionError(true);
+        
+        // 재시도 횟수 체크
+        if (sessionRetryCount < 3) {
+          setSessionRetryCount(prev => prev + 1);
+          console.log(`🔄 세션 생성 재시도 중... (${sessionRetryCount + 1}/3)`);
+          
+          // 3초 후 자동 재시도
+          setTimeout(() => {
+            initializeSession();
+          }, 3000);
+        } else {
+          console.error('❌ 세션 생성 최대 재시도 횟수 초과');
+        }
       }
     };
     
@@ -582,6 +597,40 @@ export default function ChatScreen() {
 
   return (
     <div className="h-screen bg-white flex flex-col">
+      {/* 세션 에러 메시지 - 채팅 영역 내부 상단 */}
+      {sessionError && (
+        <div className="bg-amber-50 border-b-2 border-amber-200 p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-amber-600">⚠️</span>
+              <span className="text-amber-700 font-medium">
+                서비스 연결 중 문제가 발생했습니다.
+                {sessionRetryCount < 3 ? (
+                  <span className="ml-2 text-amber-600">
+                    자동으로 재시도 중입니다... ({sessionRetryCount + 1}/3)
+                  </span>
+                ) : (
+                  <span className="ml-2 text-amber-600">
+                    잠시 후 다시 시도해주세요.
+                  </span>
+                )}
+              </span>
+            </div>
+            {sessionRetryCount >= 3 && (
+              <button
+                onClick={() => {
+                  setSessionRetryCount(0);
+                  setSessionError(false);
+                  window.location.reload();
+                }}
+                className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors font-medium"
+              >
+                새로고침
+              </button>
+            )}
+          </div>
+        </div>
+      )}
       {/* 로딩 화면 */}
       {showResult && isLoading && (
         <div className="flex-1 flex items-center justify-center bg-gradient-to-br from-orange-50 to-orange-100">
