@@ -446,7 +446,15 @@ export default function ChatScreen() {
             <div className="bg-white rounded-lg shadow-lg p-6">
               {activeTab === 'recipe' && (
                 <div>
-                  <p className="text-gray-600 mb-4">{currentRecipe.description}</p>
+                  {/* 요리 이미지 플레이스홀더 */}
+                  <div className="w-full h-48 bg-gradient-to-br from-orange-100 to-orange-200 rounded-lg flex items-center justify-center mb-6">
+                    <span className="text-orange-600 font-medium">요리 이미지</span>
+                  </div>
+
+                  {/* 레시피 설명 */}
+                  <p className="text-gray-600 mb-6">{currentRecipe.description}</p>
+
+                  {/* 기본 정보 */}
                   <div className="grid grid-cols-2 gap-4 mb-6">
                     <div className="text-center p-3 bg-orange-50 rounded-lg">
                       <p className="text-sm text-gray-600">조리시간</p>
@@ -457,6 +465,88 @@ export default function ChatScreen() {
                       <p className="text-lg font-semibold text-orange-600">{currentRecipe.calories}kcal</p>
                     </div>
                   </div>
+
+                  {/* 타겟별 특화 정보 */}
+                  {selectedTarget && (
+                    <div className="mb-6">
+                      {selectedTarget === 'keto' && (
+                        <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                          <div className="flex items-center mb-2">
+                            <span className="text-xl mr-2">🥑</span>
+                            <h4 className="font-semibold text-purple-800">케토 정보</h4>
+                          </div>
+                          <p className="text-purple-700 mb-2">순 탄수화물: 5g</p>
+                          <p className="text-sm text-purple-600">💡 케톤 적응기에는 전해질 보충이 중요해요!</p>
+                        </div>
+                      )}
+                      
+                      {selectedTarget === 'baby' && (
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                          <div className="flex items-center mb-2">
+                            <span className="text-xl mr-2">👶</span>
+                            <h4 className="font-semibold text-blue-800">이유식 정보</h4>
+                          </div>
+                          <p className="text-blue-700 mb-2">권장 월령: 9-12개월</p>
+                          <p className="text-sm text-blue-600">💡 아기가 삼키기 쉽도록 충분히 으깨주세요!</p>
+                        </div>
+                      )}
+                      
+                      {selectedTarget === 'diabetes' && (
+                        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                          <div className="flex items-center mb-2">
+                            <span className="text-xl mr-2">💉</span>
+                            <h4 className="font-semibold text-green-800">당뇨 관리 정보</h4>
+                          </div>
+                          <p className="text-green-700 mb-2">GI 지수: 45 (낮음)</p>
+                          <p className="text-sm text-green-600">💡 식후 혈당 측정을 권장해요!</p>
+                        </div>
+                      )}
+                      
+                      {selectedTarget === 'general' && (
+                        <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                          <div className="flex items-center mb-2">
+                            <span className="text-xl mr-2">🍽️</span>
+                            <h4 className="font-semibold text-orange-800">건강 정보</h4>
+                          </div>
+                          <p className="text-orange-700 mb-2">균형잡힌 영양소 구성</p>
+                          <p className="text-sm text-orange-600">💡 규칙적인 식사가 건강의 기본이에요!</p>
+                        </div>
+                      )}
+                      
+                      {selectedTarget === 'fridge' && (
+                        <div className="bg-teal-50 border border-teal-200 rounded-lg p-4">
+                          <div className="flex items-center mb-2">
+                            <span className="text-xl mr-2">🧊</span>
+                            <h4 className="font-semibold text-teal-800">냉장고 활용 정보</h4>
+                          </div>
+                          <p className="text-teal-700 mb-2">재료 활용도: 95%</p>
+                          <p className="text-sm text-teal-600">💡 남은 재료로 다른 요리도 만들어보세요!</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* 조리 방법 */}
+                  {currentRecipe.steps && currentRecipe.steps.length > 0 && (
+                    <div className="mb-6">
+                      <h4 className="font-semibold text-gray-800 mb-4">조리 방법</h4>
+                      <div className="space-y-4">
+                        {currentRecipe.steps.map((step, index) => (
+                          <div key={index} className="flex items-start">
+                            <div className="flex-shrink-0 w-8 h-8 bg-orange-500 text-white rounded-full flex items-center justify-center text-sm font-semibold mr-4">
+                              {index + 1}
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-gray-700">{step}</p>
+                              {index < currentRecipe.steps.length - 1 && (
+                                <div className="w-px h-4 bg-gray-300 ml-4 mt-2"></div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
