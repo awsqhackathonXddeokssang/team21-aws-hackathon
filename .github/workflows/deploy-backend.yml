@@ -1,4 +1,4 @@
-name: Deploy Backend API Gateway
+name: Deploy Backend Infrastructure
 
 on:
   push:
@@ -17,6 +17,18 @@ jobs:
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: us-east-1
     
+    - name: Deploy Lambda Functions
+      run: |
+        cd backend/infrastructure
+        chmod +x deploy.sh
+        ./deploy.sh
+    
+    - name: Deploy Step Functions
+      run: |
+        cd backend/infrastructure
+        chmod +x deploy-stepfunctions.sh
+        ./deploy-stepfunctions.sh
+    
     - name: Deploy Session API
       run: |
         cd backend/infrastructure
@@ -30,7 +42,7 @@ jobs:
         -d '{
           "embeds": [{
             "title": "✅ Backend Deployment Success",
-            "description": "API Gateway deployed successfully",
+            "description": "Lambda, Step Functions, and API Gateway deployed successfully",
             "color": 3066993,
             "fields": [
               {"name": "Branch", "value": "${{ github.ref_name }}", "inline": true},
@@ -47,7 +59,7 @@ jobs:
         -d '{
           "embeds": [{
             "title": "❌ Backend Deployment Failed",
-            "description": "API Gateway deployment failed",
+            "description": "Backend infrastructure deployment failed",
             "color": 15158332,
             "fields": [
               {"name": "Branch", "value": "${{ github.ref_name }}", "inline": true},
