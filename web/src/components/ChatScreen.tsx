@@ -31,8 +31,9 @@ export default function ChatScreen() {
 
   // 마지막 메시지 기반 선택지 표시 로직
   const lastMessage = messages[messages.length - 1];
-  const shouldShowOptions = lastMessage?.messageType === 'choice' && lastMessage?.options;
-  const shouldShowTextInput = lastMessage?.messageType === 'text_input';
+  const hasValidSession = sessionId && sessionId !== '';
+  const shouldShowOptions = hasValidSession && lastMessage?.messageType === 'choice' && lastMessage?.options;
+  const shouldShowTextInput = hasValidSession && lastMessage?.messageType === 'text_input';
 
   // 세션 초기화
   useEffect(() => {
@@ -112,7 +113,13 @@ export default function ChatScreen() {
 
     try {
       // 서버에 즉시 동기화
-      await ApiService.updateProfile(sessionId, { target });
+      const currentSessionId = sessionId || localStorage.getItem('sessionId') || '';
+      if (!currentSessionId) {
+        console.error('Session not initialized');
+        setIsLoading(false);
+        return;
+      }
+      await ApiService.updateProfile(currentSessionId, { target });
       console.log('✅ Target saved to server:', target);
 
       // AI 응답 메시지 추가
@@ -185,7 +192,13 @@ export default function ChatScreen() {
           return;  // setIsLoading(false) 실행 방지
         } else if (currentStep === 2) {
           // Step 2에서 요리시간 선택 - 서버에 저장
-          await ApiService.updateProfile(sessionId, { 
+          const currentSessionId = sessionId || localStorage.getItem('sessionId') || '';
+          if (!currentSessionId) {
+            console.error('Session not initialized');
+            setIsLoading(false);
+            return;
+          }
+          await ApiService.updateProfile(currentSessionId, { 
             target: selectedTarget,
             servings: getServingsFromMessages(),
             cookingTime: option 
@@ -208,7 +221,13 @@ export default function ChatScreen() {
         // 기본 질문 단계 (currentStep 1: 인분 선택)
         if (currentStep === 1) {
           // 인분 선택 - 서버에 저장
-          await ApiService.updateProfile(sessionId, { 
+          const currentSessionId = sessionId || localStorage.getItem('sessionId') || '';
+          if (!currentSessionId) {
+            console.error('Session not initialized');
+            setIsLoading(false);
+            return;
+          }
+          await ApiService.updateProfile(currentSessionId, { 
             target: selectedTarget,
             servings: option 
           });
@@ -546,7 +565,14 @@ export default function ChatScreen() {
       };
 
       // ApiService를 통해 Bedrock 분석 요청
-      const response = await ApiService.updateProfile(sessionId, profileData, inputText);
+      const currentSessionId = sessionId || localStorage.getItem('sessionId') || '';
+      if (!currentSessionId) {
+        console.error('Session not initialized');
+        setIsLoading(false);
+        setShowTextInput(true);
+        return;
+      }
+      const response = await ApiService.updateProfile(currentSessionId, profileData, inputText);
       console.log('✅ Additional info processed:', response);
 
       // AI 응답 메시지 추가
@@ -571,14 +597,28 @@ export default function ChatScreen() {
     } catch (error) {
       console.error('❌ Additional question processing failed:', error);
       
-      // 에러 시 fallback 응답
-      const errorMessage: ChatMessage = {
-        id: `ai-error-${Date.now()}`,
-        type: 'ai',
-        content: '죄송해요, 일시적인 오류가 발생했어요. 다시 시도해주세요.',
-        timestamp: new Date()
-      };
-      setMessages(prev => [...prev, errorMessage]);
+      // NON_FOOD_RELATED_PROMPT 에러 처리
+      if (error instanceof Error && error.message.includes('NON_FOOD_RELATED_PROMPT')) {
+        const guidanceMessage: ChatMessage = {
+          id: `ai-guidance-${Date.now()}`,
+          type: 'ai',
+          content: '음식이나 요리와 관련된 내용을 입력해주세요! 예를 들어 알레르기, 선호하는 맛, 싫어하는 음식, 건강 상태 등을 알려주시면 더 맞춤형 레시피를 추천해드릴 수 있어요. 😊',
+          timestamp: new Date()
+        };
+        setMessages(prev => [...prev, guidanceMessage]);
+        
+        // 텍스트 입력창 다시 표시하여 대화 계속
+        setShowTextInput(true);
+      } else {
+        // 다른 에러는 기존 처리
+        const errorMessage: ChatMessage = {
+          id: `ai-error-${Date.now()}`,
+          type: 'ai',
+          content: '죄송해요, 일시적인 오류가 발생했어요. 다시 시도해주세요.',
+          timestamp: new Date()
+        };
+        setMessages(prev => [...prev, errorMessage]);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -618,8 +658,14 @@ export default function ChatScreen() {
     
     try {
       // Phase 3 - 백엔드로 레시피 생성 요청
-      console.log('🍳 Starting recipe processing for session:', sessionId);
-      const response = await ApiService.processRecipe(sessionId);
+      const currentSessionId = sessionId || localStorage.getItem('sessionId') || '';
+      if (!currentSessionId) {
+        console.error('Session not initialized');
+        setIsLoading(false);
+        return;
+      }
+      console.log('🍳 Starting recipe processing for session:', currentSessionId);
+      const response = await ApiService.processRecipe(currentSessionId);
       console.log('✅ Recipe processing started:', response);
       
       // 로딩 화면으로 즉시 전환 (폴링은 ResultModal에서 처리)

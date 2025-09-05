@@ -83,6 +83,10 @@ export class ApiService {
       console.log('📡 API 응답 상태:', response.status, response.statusText);
 
       if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        if (errorData.error === 'NON_FOOD_RELATED_PROMPT') {
+          throw new Error('NON_FOOD_RELATED_PROMPT');
+        }
         throw new ApiError(response.status, `HTTP ${response.status}: ${response.statusText}`);
       }
 
