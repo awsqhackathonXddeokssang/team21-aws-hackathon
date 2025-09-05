@@ -1,7 +1,17 @@
 {
   "Comment": "AI Chef Simplified Workflow - Lambda manages DynamoDB",
-  "StartAt": "OrchestrateSession",
+  "StartAt": "CreateRecipeWithRAG",
   "States": {
+    "CreateRecipeWithRAG": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "create-recipe-with-rag",
+        "Payload.$": "$"
+      },
+      "ResultPath": "$.ragResult",
+      "Next": "OrchestrateSession"
+    },
     "OrchestrateSession": {
       "Type": "Task",
       "Resource": "arn:aws:states:::lambda:invoke",

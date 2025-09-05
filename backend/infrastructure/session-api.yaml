@@ -142,6 +142,14 @@ Resources:
         Types:
           - REGIONAL
 
+  # Sessions Resource
+  SessionsResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !GetAtt ApiGateway.RootResourceId
+      PathPart: 'sessions'
+
   # Session Resource
   SessionResource:
     Type: AWS::ApiGateway::Resource
@@ -165,6 +173,65 @@ Resources:
       RestApiId: !Ref ApiGateway
       ParentId: !Ref SessionIdResource
       PathPart: 'process'
+
+  # Sessions GET Method (list sessions)
+  SessionsGetMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref SessionsResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SessionLambda.Arn}/invocations'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: false
+
+  # Sessions POST Method (create session)
+  SessionsPostMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref SessionsResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SessionLambda.Arn}/invocations'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: false
+
+  # Sessions OPTIONS Method for CORS
+  SessionsOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref SessionsResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: false
+            method.response.header.Access-Control-Allow-Methods: false
+            method.response.header.Access-Control-Allow-Origin: false
 
   # POST Method
   ProcessMethod:
@@ -210,6 +277,24 @@ Resources:
             method.response.header.Access-Control-Allow-Methods: false
             method.response.header.Access-Control-Allow-Origin: false
 
+  # Lambda Permission for API Gateway - Sessions
+  LambdaApiGatewaySessionsPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref SessionLambda
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub '${ApiGateway}/*/GET/sessions'
+
+  # Lambda Permission for API Gateway - Sessions POST
+  LambdaApiGatewaySessionsPostPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref SessionLambda
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub '${ApiGateway}/*/POST/sessions'
+
   # Lambda Permission for API Gateway
   LambdaApiGatewayPermission:
     Type: AWS::Lambda::Permission
@@ -223,27 +308,14 @@ Resources:
   ApiDeployment:
     Type: AWS::ApiGateway::Deployment
     DependsOn:
+      - SessionsGetMethod
+      - SessionsPostMethod
+      - SessionsOptionsMethod
       - ProcessMethod
       - ProcessOptionsMethod
     Properties:
       RestApiId: !Ref ApiGateway
       StageName: !Ref Environment
-
-  # DynamoDB Sessions Table
-  SessionsTable:
-    Type: AWS::DynamoDB::Table
-    Properties:
-      TableName: !Sub 'ai-chef-sessions-${Environment}'
-      BillingMode: PAY_PER_REQUEST
-      AttributeDefinitions:
-        - AttributeName: sessionId
-          AttributeType: S
-      KeySchema:
-        - AttributeName: sessionId
-          KeyType: HASH
-      TimeToLiveSpecification:
-        AttributeName: ttl
-        Enabled: true
 
 Outputs:
   ApiGatewayUrl:
