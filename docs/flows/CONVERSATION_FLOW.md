@@ -20,28 +20,21 @@ graph TD
     Target -->|일반 다이어트| GeneralFlow[일반 플로우]
     Target -->|냉장고 파먹기| FridgeFlow[냉장고 플로우]
     
-    KetoFlow --> KetoPhase[케토 단계 - Step 1]
-    KetoPhase --> KetoCarb[탄수화물 제한 - Step 2]
-    KetoCarb --> CommonFlow[공통 질문]
-    
-    BabyFlow --> BabyMonth[월령 확인 - Step 1]
-    BabyMonth --> BabyAllergy[알레르기 확인 - Step 2]
-    BabyAllergy --> CommonFlow
-    
-    DiabetesFlow --> DiabetesBlood[혈당 수치 - Step 1]
-    DiabetesBlood --> DiabetesMed[복용 약물 - Step 2]
-    DiabetesMed --> CommonFlow
-    
+    KetoFlow --> CommonFlow[공통 질문]
+    BabyFlow --> CommonFlow
+    DiabetesFlow --> CommonFlow
     GeneralFlow --> CommonFlow
+    FridgeFlow --> CommonFlow
     
-    FridgeFlow --> FridgeIngredient[재료 선택 - Step 1000]
-    FridgeIngredient --> FridgeTime[요리 시간 - Step 1001]
-    FridgeTime --> FridgeServing[인분 수 - Step 1002]
-    FridgeServing --> ProfileComplete[프로필 완성]
+    CommonFlow --> Serving[인분 수 - Step 1]
+    Serving --> CookTime[요리 시간 - Step 2]
+    CookTime --> AdditionalQ{추가 질문이 있으신가요?<br/>Step 3}
     
-    CommonFlow --> Budget[예산 설정 - Step 100]
-    Budget --> Serving[인분 수 - Step 101]
-    Serving --> ProfileComplete
+    AdditionalQ -->|네, 질문이 있어요| TextInput[자유 텍스트 입력]
+    TextInput --> AIResponse[AI 응답 - Mock]
+    AIResponse --> AdditionalQ
+    
+    AdditionalQ -->|아니요, 충분해요| ProfileComplete[프로필 완성]
     
     ProfileComplete --> Validation{프로필 검증}
     Validation -->|실패| ErrorMsg[에러 메시지]
@@ -84,21 +77,26 @@ sequenceDiagram
 
     U->>F: 타겟 선택 (예: 케토)
     F->>F: currentStep = 1
-    F->>U: 케토 단계 질문
-
-    U->>F: 케토 단계 답변
-    F->>F: currentStep = 2
-    F->>U: 탄수화물 제한 질문
-
-    U->>F: 탄수화물 답변
-    F->>F: currentStep = 100
-    F->>U: 예산 질문
-
-    U->>F: 예산 답변
-    F->>F: currentStep = 101
     F->>U: 인분 수 질문
 
     U->>F: 인분 수 답변
+    F->>F: currentStep = 2
+    F->>U: 요리 시간 질문
+
+    U->>F: 요리 시간 답변
+    F->>F: currentStep = 3
+    F->>U: 추가 질문이 있으신가요?
+
+    loop 추가 질문 무한 루프
+        U->>F: "네, 질문이 있어요"
+        F->>U: 텍스트 입력창 표시
+        U->>F: 자유 텍스트 입력
+        F->>F: additionalQuestions 배열에 저장
+        F->>U: Mock AI 응답 "네, 알겠습니다!"
+        F->>U: "또 다른 질문이 있으신가요?"
+    end
+
+    U->>F: "아니요, 충분해요"
     F->>F: 프로필 완성
     F->>A: POST /session/{id}/process
 
@@ -108,7 +106,7 @@ sequenceDiagram
     
     par 병렬 처리
         S->>L2: 레시피 생성 요청
-        L2->>B: AI 프롬프트 전송
+        L2->>B: AI 프롬프트 전송 (추가 질문 포함)
         B-->>L2: 레시피 응답
     and
         S->>L3: 가격 조회 요청
@@ -130,7 +128,46 @@ sequenceDiagram
     F->>U: 최종 결과 표시
 ```
 
-## 타겟별 상세 질문 플로우
+## 현재 구현된 간소화 플로우 (Phase 2)
+
+### 간소화된 질문 구조
+현재 구현에서는 복잡한 타겟별 특화 질문 대신 **간소화된 공통 질문 + 무한 추가 질문** 구조를 사용합니다.
+
+```mermaid
+graph TD
+    Start[타겟 선택] --> Step1[인분 수 질문<br/>Step 1]
+    Step1 --> Step2[요리 시간 질문<br/>Step 2]
+    Step2 --> Step3{추가 질문이 있으신가요?<br/>Step 3}
+    
+    Step3 -->|네, 질문이 있어요| TextInput[자유 텍스트 입력]
+    TextInput --> MockAI[Mock AI 응답<br/>"네, 알겠습니다!"]
+    MockAI --> Step3
+    
+    Step3 -->|아니요, 충분해요| Submit[프로필 제출<br/>Phase 3로 이동]
+    
+    Submit --> Backend[백엔드 처리<br/>Bedrock + 네이버 API]
+    Backend --> Result[결과 표시]
+```
+
+### 데이터 구조
+```typescript
+interface UserProfile {
+  sessionId: string;
+  target: 'keto' | 'baby' | 'diabetes' | 'general' | 'fridge';
+  servings: '1인분' | '2인분' | '3-4인분' | '5인분 이상';
+  cookingTime: '10분 이내' | '30분 이내' | '1시간 이내' | '시간 상관없음';
+  additionalQuestions: string[]; // 사용자가 입력한 추가 질문들
+  createdAt: string;
+}
+```
+
+### 특징
+- **단순화된 질문**: 타겟별 복잡한 질문 대신 공통 질문 3개
+- **무한 추가 질문**: 사용자가 원하는 만큼 자유롭게 질문 추가
+- **Mock AI 응답**: 현재는 "네, 알겠습니다!" 고정 응답 (추후 Bedrock 연동)
+- **Phase 2 완료**: 프로필 수집까지만 구현 (Phase 3 백엔드 연동 대기)
+
+## 타겟별 상세 질문 플로우 (향후 구현 예정)
 
 ### 1. 케토 다이어트 플로우
 ```mermaid

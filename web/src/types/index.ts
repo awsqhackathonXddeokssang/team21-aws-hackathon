@@ -52,6 +52,20 @@ export interface Recipe {
   };
 }
 
+// 세션 응답
+export interface SessionResponse {
+  sessionId: string;
+  createdAt: string;
+  expiresAt: string;
+}
+
+// 추가 질문 응답
+export interface AdditionalQuestionResponse {
+  response: string;
+  sessionId: string;
+  timestamp: string;
+}
+
 // 채팅 메시지
 export interface ChatMessage {
   id: string;

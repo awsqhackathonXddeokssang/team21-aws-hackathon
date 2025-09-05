@@ -1,4 +1,4 @@
-import { Recipe, ChatMessage, UserTarget, ApiResponse } from '@/types';
+import { Recipe, ChatMessage, UserTarget, ApiResponse, SessionResponse, AdditionalQuestionResponse } from '@/types';
 import { sampleRecipes, conversationScenarios } from './mockData';
 
 // API 응답 시뮬레이션을 위한 지연 함수
@@ -6,6 +6,87 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Mock API 클래스
 export class MockApiService {
+  // 세션 시작 API 시뮬레이션
+  static async startSession(): Promise<SessionResponse> {
+    // 1초 로딩 시뮬레이션
+    await delay(1000);
+    
+    const timestamp = Date.now();
+    const random = Math.random().toString(36).substring(2, 8);
+    const sessionId = `sess-${timestamp}-${random}`;
+    
+    const sessionData: SessionResponse = {
+      sessionId,
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString() // 2시간 후
+    };
+    
+    console.log('Mock Session Created:', sessionData);
+    return sessionData;
+  }
+
+  // 추가 질문 처리 API 시뮬레이션 (Mock Bedrock)
+  static async processAdditionalQuestion(
+    question: string, 
+    sessionId: string,
+    profile?: any
+  ): Promise<AdditionalQuestionResponse> {
+    // 1-2초 로딩 시뮬레이션 (Bedrock 호출 시뮬레이션)
+    await delay(Math.random() * 1000 + 1000);
+    
+    // Mock Bedrock 응답 생성
+    const response = this.generateMockBedrockResponse(question, profile);
+    
+    const responseData: AdditionalQuestionResponse = {
+      response,
+      sessionId,
+      timestamp: new Date().toISOString()
+    };
+    
+    console.log('Mock Bedrock Response:', { question, response, sessionId });
+    return responseData;
+  }
+
+  // Mock Bedrock 응답 생성 로직
+  private static generateMockBedrockResponse(question: string, profile?: any): string {
+    const lowerQuestion = question.toLowerCase();
+    
+    // 키워드 기반 응답 생성
+    if (lowerQuestion.includes('매운') || lowerQuestion.includes('매워')) {
+      return '매운 음식을 피하시는군요! 담백하고 순한 맛의 레시피로 준비하겠습니다. 🌶️';
+    }
+    
+    if (lowerQuestion.includes('알레르기') || lowerQuestion.includes('알러지')) {
+      return '알레르기 정보를 알려주셔서 감사해요. 해당 재료는 제외하고 안전한 레시피를 만들어드릴게요! 🛡️';
+    }
+    
+    if (lowerQuestion.includes('시간') || lowerQuestion.includes('빨리') || lowerQuestion.includes('급해')) {
+      return '시간이 부족하시는군요! 15분 이내로 완성할 수 있는 간단한 레시피를 추천해드릴게요. ⏰';
+    }
+    
+    if (lowerQuestion.includes('예산') || lowerQuestion.includes('저렴') || lowerQuestion.includes('싸게')) {
+      return '경제적인 식단을 원하시는군요! 가성비 좋은 재료로 맛있는 레시피를 만들어드릴게요. 💰';
+    }
+    
+    if (lowerQuestion.includes('건강') || lowerQuestion.includes('다이어트') || lowerQuestion.includes('살')) {
+      return '건강한 식단을 중요하게 생각하시는군요! 영양 균형을 고려한 저칼로리 레시피를 준비하겠습니다. 🥗';
+    }
+    
+    if (lowerQuestion.includes('아이') || lowerQuestion.includes('아기') || lowerQuestion.includes('어린이')) {
+      return '아이를 위한 음식이군요! 영양가 높고 안전한 재료로 아이가 좋아할 만한 레시피를 만들어드릴게요. 👶';
+    }
+    
+    // 기본 응답
+    const defaultResponses = [
+      '네, 알겠습니다! 말씀해주신 내용을 레시피에 반영하겠어요. 🍳',
+      '좋은 의견이네요! 그 부분을 고려해서 맞춤 레시피를 준비하겠습니다. ✨',
+      '이해했습니다! 요청사항을 반영한 특별한 레시피를 만들어드릴게요. 👨‍🍳',
+      '말씀해주신 점을 꼼꼼히 체크해서 완벽한 레시피를 준비하겠습니다! 📝'
+    ];
+    
+    return defaultResponses[Math.floor(Math.random() * defaultResponses.length)];
+  }
+
   // 레시피 생성 API 시뮬레이션
   static async generateRecipe(
     target: UserTarget, 
