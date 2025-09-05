@@ -82,7 +82,10 @@ Resources:
                           createdAt: now.toISOString(),
                           expiresAt: expiresAt.toISOString(),
                           ttl,
-                          status: 'created'
+                          status: 'created',
+                          nutritionStatus: 'pending',
+                          imageStatus: 'pending',
+                          priceStatus: 'pending'
                       }
                   }).promise();
                   
