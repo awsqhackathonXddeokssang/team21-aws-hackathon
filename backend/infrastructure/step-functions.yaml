@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'AI Chef Step Functions - Simplified Lambda-managed DynamoDB'
+Description: 'AI Chef Step Functions with Parallel Processing'
 
 Resources:
   # Step Functions Execution Role
@@ -23,7 +23,7 @@ Resources:
                   - lambda:InvokeFunction
                 Resource: '*'
 
-  # Step Functions State Machine - Simplified
+  # Step Functions State Machine
   RecipeWorkflowStateMachine:
     Type: AWS::StepFunctions::StateMachine
     Properties:
@@ -31,9 +31,19 @@ Resources:
       RoleArn: !GetAtt StepFunctionsRole.Arn
       DefinitionString: |
         {
-          "Comment": "AI Chef Simplified Workflow - Lambda manages DynamoDB",
-          "StartAt": "OrchestrateSession",
+          "Comment": "AI Chef Workflow with Parallel Processing",
+          "StartAt": "CreateRecipeWithRAG",
           "States": {
+            "CreateRecipeWithRAG": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "create-recipe-with-rag",
+                "Payload.$": "$"
+              },
+              "ResultPath": "$.ragResult",
+              "Next": "OrchestrateSession"
+            },
             "OrchestrateSession": {
               "Type": "Task",
               "Resource": "arn:aws:states:::lambda:invoke",
@@ -55,39 +65,54 @@ Resources:
                 "recipe.$": "$.Payload.body"
               },
               "ResultPath": "$.recipeResult",
-              "Retry": [
-                {
-                  "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException"],
-                  "IntervalSeconds": 2,
-                  "MaxAttempts": 3,
-                  "BackoffRate": 2.0
-                }
-              ],
-              "Next": "FetchPrices"
+              "Next": "ParallelProcessing"
             },
-            "FetchPrices": {
-              "Type": "Task",
-              "Resource": "arn:aws:states:::lambda:invoke",
-              "Parameters": {
-                "FunctionName": "ai-chef-price",
-                "Payload": {
-                  "sessionId.$": "$.sessionId",
-                  "profile.$": "$.profile",
-                  "ingredients.$": "$.recipeResult.recipe.ingredients"
-                }
-              },
-              "ResultSelector": {
-                "pricing.$": "$.Payload.body"
-              },
-              "ResultPath": "$.pricingResult",
-              "Retry": [
+            "ParallelProcessing": {
+              "Type": "Parallel",
+              "Branches": [
                 {
-                  "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException"],
-                  "IntervalSeconds": 2,
-                  "MaxAttempts": 3,
-                  "BackoffRate": 2.0
+                  "StartAt": "FetchPrices",
+                  "States": {
+                    "FetchPrices": {
+                      "Type": "Task",
+                      "Resource": "arn:aws:states:::lambda:invoke",
+                      "Parameters": {
+                        "FunctionName": "ai-chef-price",
+                        "Payload": {
+                          "sessionId.$": "$.sessionId",
+                          "profile.$": "$.profile",
+                          "ingredients.$": "$.recipeResult.recipe.ingredients"
+                        }
+                      },
+                      "ResultSelector": {
+                        "pricing.$": "$.Payload.body"
+                      },
+                      "End": true
+                    }
+                  }
+                },
+                {
+                  "StartAt": "GenerateRecipeImage",
+                  "States": {
+                    "GenerateRecipeImage": {
+                      "Type": "Task",
+                      "Resource": "arn:aws:states:::lambda:invoke",
+                      "Parameters": {
+                        "FunctionName": "recipe-image-generator",
+                        "Payload": {
+                          "sessionId.$": "$.sessionId",
+                          "recipe.$": "$.recipeResult.recipe"
+                        }
+                      },
+                      "ResultSelector": {
+                        "image.$": "$.Payload.body"
+                      },
+                      "End": true
+                    }
+                  }
                 }
               ],
+              "ResultPath": "$.parallelResults",
               "Next": "CombineResults"
             },
             "CombineResults": {
@@ -99,7 +124,8 @@ Resources:
                   "sessionId.$": "$.sessionId",
                   "profile.$": "$.profile",
                   "recipeResult.$": "$.recipeResult.recipe",
-                  "pricingResult.$": "$.pricingResult.pricing"
+                  "pricingResult.$": "$.parallelResults[0].pricing",
+                  "imageResult.$": "$.parallelResults[1].image"
                 }
               },
               "End": true
@@ -109,7 +135,7 @@ Resources:
 
 Outputs:
   StateMachineArn:
-    Description: 'Simplified Step Functions State Machine ARN'
+    Description: 'Step Functions State Machine ARN'
     Value: !Ref RecipeWorkflowStateMachine
     Export:
       Name: !Sub '${AWS::StackName}-StateMachineArn'
