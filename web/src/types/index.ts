@@ -59,6 +59,9 @@ export interface ChatMessage {
   content: string;
   timestamp: Date;
   isTyping?: boolean;
+  messageType?: 'text' | 'choice' | 'ingredients';
+  options?: string[];
+  selectedOption?: string;
 }
 
 // API 응답
