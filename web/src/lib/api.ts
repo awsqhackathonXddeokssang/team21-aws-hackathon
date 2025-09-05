@@ -104,7 +104,7 @@ export class ApiService {
   static async processRecipe(sessionId: string): Promise<any> {
     try {
       console.log('🍳 API 호출 시작 - processRecipe');
-      const url = `${API_CONFIG.BASE_URL}/process`;
+      const url = `${API_CONFIG.BASE_URL}/sessions/process`;
       console.log('📍 API URL:', url);
       
       const response = await this.fetchWithTimeout(url, {
