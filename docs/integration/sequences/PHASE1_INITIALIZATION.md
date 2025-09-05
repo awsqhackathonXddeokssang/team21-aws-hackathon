@@ -9,6 +9,7 @@
 sequenceDiagram
     participant User
     participant Frontend
+    participant MockApiService
     participant API Gateway as API Gateway
     participant Lambda
     participant DynamoDB
@@ -19,20 +20,23 @@ sequenceDiagram
     Frontend->>Frontend: localStorage에서 sessionId 확인
     
     alt sessionId 없음 또는 만료
-        Frontend->>API Gateway: POST /session/start
+        Frontend->>MockApiService: startSession() 호출
+        MockApiService->>API Gateway: POST /session/start
         API Gateway->>Lambda: 세션 생성 요청
-        Lambda->>DynamoDB: sessionId 생성 및 저장 (TTL 2시간)
+        Lambda->>Lambda: sessionId 생성 (서버에서만)
+        Lambda->>DynamoDB: sessionId 및 메타데이터 저장 (TTL 2시간)
         
         Note over Lambda: 세션 ID 형식: sess-{timestamp}-{random}
         Note over Lambda: STATUS: 'idle'로 시작
         
         DynamoDB-->>Lambda: 저장 완료
-        Lambda-->>API Gateway: sessionId 반환
-        API Gateway-->>Frontend: sessionId, createdAt, expiresAt 반환
+        Lambda-->>API Gateway: sessionId, createdAt, expiresAt 반환
+        API Gateway-->>MockApiService: 세션 데이터 반환
+        MockApiService-->>Frontend: sessionId 반환
         Frontend->>Frontend: localStorage에 sessionId 저장
         Frontend-->>User: 세션 준비 완료
     else sessionId 유효
-        Note over Frontend: 기존 세션 사용
+        Note over Frontend: 기존 세션 사용 (서버 검증 생략)
         Frontend-->>User: 세션 복원 완료
     end
 ```
@@ -50,37 +54,46 @@ const savedSessionId = localStorage.getItem('sessionId');
 const sessionExpiry = localStorage.getItem('sessionExpiry');
 
 if (savedSessionId && sessionExpiry && new Date(sessionExpiry) > new Date()) {
-    // 유효한 세션 존재
+    // 유효한 세션 존재 - 서버 검증 필요시 추가 호출
     return savedSessionId;
+} else {
+    // 새 세션 생성 필요
+    const sessionData = await MockApiService.startSession();
+    return sessionData.sessionId;
 }
 ```
 
 ### 3. 새 세션 생성 요청
-- **Endpoint**: `POST /session/start`
+- **Frontend**: `MockApiService.startSession()` 호출
+- **Mock API**: `POST /session/start` 시뮬레이션
 - **Request Body**: 빈 객체 `{}`
 - **Headers**: `Content-Type: application/json`
 
-### 4. Lambda 세션 생성 로직
+### 4. 서버 세션 생성 로직 (Mock)
 ```javascript
-// 세션 ID 생성
-const timestamp = Date.now();
-const random = Math.random().toString(36).substring(2, 8);
-const sessionId = `sess-${timestamp}-${random}`;
-
-// DynamoDB 저장 데이터
-const sessionData = {
+// MockApiService.startSession() 구현
+export const startSession = async (): Promise<SessionResponse> => {
+  // 실제 구현에서는 서버가 생성
+  const timestamp = Date.now();
+  const random = Math.random().toString(36).substring(2, 8);
+  const sessionId = `sess-${timestamp}-${random}`;
+  
+  const sessionData = {
     sessionId,
-    status: 'idle',
     createdAt: new Date().toISOString(),
-    expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(), // 2시간 후
-    TTL: Math.floor(Date.now() / 1000) + 7200 // DynamoDB TTL (2시간)
+    expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString()
+  };
+  
+  // Mock: 실제로는 서버에서 DynamoDB 저장
+  return sessionData;
 };
 ```
 
-### 5. DynamoDB 저장
+### 5. DynamoDB 저장 (서버에서 처리)
 - **Table**: `ai-chef-sessions`
 - **Partition Key**: `sessionId`
 - **TTL Attribute**: `TTL` (2시간 자동 삭제)
+- **프론트엔드는 관여하지 않음**
 
 ### 6. 응답 데이터
 ```json
@@ -93,10 +106,44 @@ const sessionData = {
 
 ### 7. Frontend 저장
 ```javascript
-// localStorage에 세션 정보 저장
-localStorage.setItem('sessionId', sessionData.sessionId);
-localStorage.setItem('sessionExpiry', sessionData.expiresAt);
+// ChatScreen useEffect 수정
+useEffect(() => {
+  const initializeSession = async () => {
+    try {
+      const sessionData = await MockApiService.startSession();
+      setSessionId(sessionData.sessionId);
+      localStorage.setItem('sessionId', sessionData.sessionId);
+      localStorage.setItem('sessionExpiry', sessionData.expiresAt);
+    } catch (error) {
+      console.error('세션 초기화 실패:', error);
+      // Fallback: 클라이언트 임시 세션
+      const fallbackId = `temp-${Date.now()}`;
+      setSessionId(fallbackId);
+    }
+  };
+  
+  initializeSession();
+}, []);
 ```
+
+## 역할 분담
+
+### Frontend 역할
+- **세션 API 호출**: `MockApiService.startSession()` 호출
+- **응답 저장**: 받은 sessionId를 localStorage에 저장
+- **세션 사용**: 이후 모든 API 호출에 sessionId 포함
+- **sessionId 생성 안 함**: 서버에서만 생성
+
+### 서버 역할 (Mock/실제)
+- **sessionId 생성**: 고유한 세션 ID 생성
+- **DynamoDB 저장**: 세션 메타데이터 저장
+- **TTL 관리**: 2시간 자동 만료 설정
+- **응답 반환**: sessionId와 만료 시간 반환
+
+### MockApiService 역할
+- **API 추상화**: 실제 서버 호출 시뮬레이션
+- **인터페이스 통일**: 실제 API와 동일한 응답 구조
+- **에러 처리**: 네트워크 오류 시뮬레이션
 
 ## 에러 처리
 
