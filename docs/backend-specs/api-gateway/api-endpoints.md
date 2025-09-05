@@ -1,8 +1,8 @@
 # AI Chef API 엔드포인트 문서
 
 ## API 개요
-- **Session API Base URL**: `https://tlg1j21vgf.execute-api.us-east-1.amazonaws.com/v1`
-- **Nutrition API Base URL**: `https://4zba2babx7.execute-api.us-east-1.amazonaws.com/v1`
+- **Session API Base URL**: `https://tlg1j21vgf.execute-api.us-east-1.amazonaws.com/dev`
+- **Nutrition API Base URL**: `https://4zba2babx7.execute-api.us-east-1.amazonaws.com`
 - **Content-Type**: `application/json`
 - **Authentication**: None (현재 버전)
 
@@ -31,36 +31,83 @@ Content-Type: application/json
 }
 ```
 
-### 2. 프로필 제출 및 처리 시작
-**POST** `/sessions/{sessionId}/process`
+### 2. 세션 조회
+**GET** `/sessions/{sessionId}`
 
-사용자 프로필을 제출하고 Step Functions 워크플로우를 시작합니다.
+세션 정보를 조회합니다.
+
+**Request:**
+```http
+GET /sessions/{sessionId}
+```
+
+**Response:**
+```json
+{
+  "sessionId": "sess_abc123def456",
+  "status": "processing",
+  "profile": {
+    "target": "keto",
+    "budget": 30000,
+    "servings": 2,
+    "carbLimit": 20,
+    "allergies": ["nuts"],
+    "cookingTime": 30
+  },
+  "createdAt": "2025-09-05T14:30:00Z"
+}
+```
+
+### 3. 세션 프로필 업데이트
+**PUT** `/sessions/{sessionId}/profile`
+
+사용자의 추가 선호도 정보를 업데이트합니다.
 
 **Request:**
 ```javascript
-const profile = {
-  target: "keto",
-  budget: 30000,
-  servings: 2,
-  carbLimit: 20,
-  allergies: ["nuts"],
-  cookingTime: 30
+const additionalPreferences = {
+  preferences: {
+    allergies: ["nuts", "shellfish"],
+    dislikes: ["spicy"],
+    tasteLevel: "mild",
+    cookingTime: 45,
+    nutritionist: {
+      hasConsulted: true,
+      recommendations: ["low sodium", "high fiber"]
+    }
+  }
 };
 
-const response = await fetch(`/sessions/${sessionId}/process`, {
-  method: 'POST',
+const response = await fetch(`/sessions/${sessionId}/profile`, {
+  method: 'PUT',
   headers: {
     'Content-Type': 'application/json'
   },
-  body: JSON.stringify({ profile })
+  body: JSON.stringify(additionalPreferences)
 });
 ```
 
 **Response:**
 ```json
 {
-  "executionId": "exec_xyz789abc123",
-  "estimatedTime": 30
+  "sessionId": "sess_abc123def456",
+  "updated": true,
+  "profile": {
+    "target": "keto",
+    "budget": 30000,
+    "servings": 2,
+    "carbLimit": 20,
+    "allergies": ["nuts", "shellfish"],
+    "cookingTime": 45,
+    "preferences": {
+      "dislikes": ["spicy"],
+      "tasteLevel": "mild",
+      "nutritionist": {
+        "hasConsulted": true,
+        "recommendations": ["low sodium", "high fiber"]
+      }
+    }
+  }
 }
 ```
 
