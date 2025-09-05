@@ -6,12 +6,27 @@ exports.handler = async (event) => {
         let recipeResult, priceResult;
         
         if (Array.isArray(event)) {
+            // 배열 형식 (레거시)
             [recipeResult, priceResult] = event;
         } else if (event.priceResult && event.nutritionResult) {
+            // 직접 호출 형식
             recipeResult = event.nutritionResult;
             priceResult = event.priceResult;
+        } else if (event.sessionId && event.recipeResult && event.pricingResult) {
+            // Step Functions 형식 (정확한 매칭)
+            recipeResult = { 
+                success: true, 
+                data: { 
+                    recipe: event.recipeResult,
+                    nutrition: event.recipeResult.nutrition || null
+                }
+            };
+            priceResult = { 
+                success: true, 
+                data: event.pricingResult 
+            };
         } else {
-            throw new Error('Invalid event format: expected array or {priceResult, nutritionResult}');
+            throw new Error('Invalid event format: expected Step Functions format {sessionId, recipeResult, pricingResult} or legacy formats');
         }
         
         // 표준 형식 응답 파싱
