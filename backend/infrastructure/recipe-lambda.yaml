@@ -1,0 +1,75 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'AI Chef Recipe Lambda Function'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    Description: Environment name
+
+Resources:
+  RecipeLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'ai-chef-recipe-lambda-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: BedrockAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource: '*'
+        - PolicyName: OpenSearchAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - es:ESHttpPost
+                  - es:ESHttpGet
+                Resource: !Sub 'arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/nutrition-rag-dev-search/*'
+
+  RecipeLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'ai-chef-recipe-${Environment}'
+      Runtime: nodejs18.x
+      Handler: index.handler
+      Role: !GetAtt RecipeLambdaRole.Arn
+      Timeout: 120
+      MemorySize: 512
+      Environment:
+        Variables:
+          BEDROCK_REGION: !Ref AWS::Region
+          OPENSEARCH_ENDPOINT: !Sub 'https://search-nutrition-rag-dev-search-m327wc6eudd6uas5cm3gnbsz7y.${AWS::Region}.es.amazonaws.com'
+      Code:
+        ZipFile: |
+          exports.handler = async (event) => {
+            return {
+              statusCode: 200,
+              recipe: {
+                recipeName: "Placeholder Recipe",
+                ingredients: ["ingredient1", "ingredient2"],
+                instructions: ["step1", "step2"],
+                nutrition: { calories: 300 }
+              }
+            };
+          };
+
+Outputs:
+  RecipeLambdaArn:
+    Description: Recipe Lambda Function ARN
+    Value: !GetAtt RecipeLambda.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-RecipeLambdaArn'
