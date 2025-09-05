@@ -1,0 +1,60 @@
+{
+  "Comment": "AI Chef Recipe Recommendation Workflow",
+  "StartAt": "OrchestrateSession",
+  "States": {
+    "OrchestrateSession": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${OrchestratorLambdaArn}",
+        "Payload.$": "$"
+      },
+      "ResultPath": "$.sessionResult",
+      "Next": "GenerateRecipeAndPrice"
+    },
+    "GenerateRecipeAndPrice": {
+      "Type": "Parallel",
+      "Branches": [
+        {
+          "StartAt": "GenerateRecipe",
+          "States": {
+            "GenerateRecipe": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "${RecipeLambdaArn}",
+                "Payload.$": "$"
+              },
+              "End": true
+            }
+          }
+        },
+        {
+          "StartAt": "GetPriceInfo",
+          "States": {
+            "GetPriceInfo": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "${PriceLambdaArn}",
+                "Payload.$": "$"
+              },
+              "End": true
+            }
+          }
+        }
+      ],
+      "ResultPath": "$.parallelResults",
+      "Next": "CombineResults"
+    },
+    "CombineResults": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${CombineLambdaArn}",
+        "Payload.$": "$"
+      },
+      "End": true
+    }
+  }
+}
