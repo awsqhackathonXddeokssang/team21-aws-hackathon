@@ -12,7 +12,7 @@ dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
 stepfunctions = boto3.client('stepfunctions', region_name='us-east-1')
 
 # DynamoDB 테이블
-sessions_table = dynamodb.Table('ai-chef-sessions-dev')
+sessions_table = dynamodb.Table('ai-chef-sessions')
 
 def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
     """Session 처리 Lambda 핸들러"""

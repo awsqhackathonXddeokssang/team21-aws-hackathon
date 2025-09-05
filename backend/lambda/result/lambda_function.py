@@ -11,8 +11,8 @@ logger.setLevel(logging.INFO)
 dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
 
 # DynamoDB 테이블
-sessions_table = dynamodb.Table('ai-chef-sessions-dev')
-results_table = dynamodb.Table('ai-chef-results-dev')
+sessions_table = dynamodb.Table('ai-chef-sessions')
+results_table = dynamodb.Table('ai-chef-results')
 
 def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
     """Result Lambda - 세션 결과 조회"""
