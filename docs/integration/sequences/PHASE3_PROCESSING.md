@@ -21,7 +21,7 @@ sequenceDiagram
     Note over API, DB: Phase 3: Process Lambda가 워크플로우 시작
     
     %% Process Lambda가 Step Functions 시작
-    API->>PL: POST /session/{id}/process
+    API->>PL: POST /session/process
     PL->>DB: 프로필 검증 및 상태 업데이트
     PL->>SF: Step Functions 워크플로우 시작
     PL-->>API: executionId 반환
@@ -136,8 +136,8 @@ sequenceDiagram
 def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
     """Process Lambda - 세션 처리 및 워크플로우 시작"""
     try:
-        session_id = event['pathParameters']['id']
         body = json.loads(event['body'])
+        session_id = body.get('sessionId')
         user_profile = body.get('userProfile')
         
         logger.info(f"Processing session: {session_id}")
@@ -555,9 +555,10 @@ aws stepfunctions describe-execution \
 ### 테스트 실행
 ```bash
 # Process Lambda를 통한 워크플로우 시작
-curl -X POST "https://jkyyb2tqm0.execute-api.us-east-1.amazonaws.com/dev/session/sess_test_789/process" \
+curl -X POST "https://jkyyb2tqm0.execute-api.us-east-1.amazonaws.com/dev/session/process" \
   -H "Content-Type: application/json" \
   -d '{
+    "sessionId": "sess_test_789",
     "userProfile": {
       "target": "keto",
       "responses": {
