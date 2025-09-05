@@ -111,11 +111,8 @@ export default function ChatScreen() {
           handleSubmitProfile();
         }
         setIsLoading(false);
-      } else if (currentStep >= 2) {
-        // 레시피 생성
-        generateRecipe();
       } else {
-        // 다음 질문
+        // 다음 질문 (currentStep 0, 1, 2)
         const nextQuestion = getNextQuestion();
         const aiMessage: ChatMessage = {
           id: `ai-next-${Date.now()}`,
