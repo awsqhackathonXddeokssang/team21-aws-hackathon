@@ -228,8 +228,13 @@ export default function ChatScreen() {
     return currentRecipe.ingredients
       .filter(ingredient => checkedItems[ingredient.name])
       .reduce((total, ingredient) => {
-        const minPrice = Math.min(...ingredient.prices.map(p => p.price));
-        return total + minPrice;
+        if (ingredient.prices && ingredient.prices.length > 0) {
+          const minPrice = Math.min(...ingredient.prices.map(p => p.price));
+          return total + minPrice;
+        } else if (ingredient.price) {
+          return total + ingredient.price;
+        }
+        return total;
       }, 0);
   };
 
@@ -249,8 +254,9 @@ export default function ChatScreen() {
             name: '닭가슴살 단호박 이유식',
             description: '9-12개월 아기를 위한 영양만점 이유식입니다. 부드럽고 소화하기 쉬운 재료로 만든 건강한 한 끼입니다.',
             cookingTime: 20,
-            calories: 180,
-            steps: [
+            difficulty: 'easy' as const,
+            servings: 2,
+            instructions: [
               '닭가슴살은 깨끗이 씻어 한 입 크기로 썰어주세요',
               '단호박은 껍질을 벗기고 작게 썰어주세요',
               '브로콜리는 꽃송이만 떼어 작게 썰어주세요',
@@ -295,7 +301,9 @@ export default function ChatScreen() {
               carbsPercent: 33,
               proteinPercent: 40,
               fatPercent: 15
-            }
+            },
+            tags: ['이유식', '12개월', '영양균형'],
+            totalPrice: 6300
           };
           break;
           
@@ -305,8 +313,9 @@ export default function ChatScreen() {
             name: '현미 채소볶음',
             description: '혈당 관리에 도움되는 저GI 현미와 신선한 채소로 만든 건강한 볶음밥입니다.',
             cookingTime: 25,
-            calories: 320,
-            steps: [
+            difficulty: 'easy' as const,
+            servings: 2,
+            instructions: [
               '현미는 미리 불려서 밥을 지어주세요',
               '브로콜리와 당근은 한 입 크기로 썰어주세요',
               '팬에 올리브오일을 두르고 당근을 먼저 볶아주세요',
@@ -360,7 +369,9 @@ export default function ChatScreen() {
               carbsPercent: 56,
               proteinPercent: 15,
               fatPercent: 23
-            }
+            },
+            tags: ['당뇨식', '저GI', '고섬유', '혈당관리'],
+            totalPrice: 15000
           };
           break;
           
@@ -370,8 +381,9 @@ export default function ChatScreen() {
             name: '케토 새우 아보카도 볶음',
             description: '저탄수화물 고지방 케톤 다이어트에 완벽한 새우 아보카도 요리입니다. 신선한 새우와 크리미한 아보카도의 조화가 일품입니다.',
             cookingTime: 15,
-            calories: 420,
-            steps: [
+            difficulty: 'easy' as const,
+            servings: 2,
+            instructions: [
               '새우는 껍질을 벗기고 내장을 제거한 후 깨끗이 씻어주세요',
               '아보카도는 반으로 갈라 씨를 제거하고 한 입 크기로 썰어주세요',
               '팬에 버터를 두르고 중불에서 녹여주세요',
@@ -434,7 +446,9 @@ export default function ChatScreen() {
               carbsPercent: 7,
               proteinPercent: 23,
               fatPercent: 70
-            }
+            },
+            tags: ['케토', '고지방', '저탄수화물', '오메가3'],
+            totalPrice: 23400
           };
       }
 
@@ -596,8 +610,9 @@ export default function ChatScreen() {
               name: '닭가슴살 단호박 이유식',
               description: '9-12개월 아기를 위한 영양만점 이유식입니다. 부드럽고 소화하기 쉬운 재료로 만든 건강한 한 끼입니다.',
               cookingTime: 20,
-              calories: 180,
-              steps: [
+              difficulty: 'easy' as const,
+              servings: 2,
+              instructions: [
                 '닭가슴살은 깨끗이 씻어 한 입 크기로 썰어주세요',
                 '단호박은 껍질을 벗기고 작게 썰어주세요',
                 '브로콜리는 꽃송이만 떼어 작게 썰어주세요',
@@ -642,7 +657,9 @@ export default function ChatScreen() {
                 carbsPercent: 33,
                 proteinPercent: 40,
                 fatPercent: 15
-              }
+              },
+              tags: ['이유식', '12개월', '영양균형'],
+              totalPrice: 6300
             };
             break;
             
@@ -652,8 +669,9 @@ export default function ChatScreen() {
               name: '현미 채소볶음',
               description: '혈당 관리에 도움되는 저GI 현미와 신선한 채소로 만든 건강한 볶음밥입니다.',
               cookingTime: 25,
-              calories: 320,
-              steps: [
+              difficulty: 'easy' as const,
+              servings: 2,
+              instructions: [
                 '현미는 미리 불려서 밥을 지어주세요',
                 '브로콜리와 당근은 한 입 크기로 썰어주세요',
                 '팬에 올리브오일을 두르고 당근을 먼저 볶아주세요',
@@ -707,7 +725,9 @@ export default function ChatScreen() {
                 carbsPercent: 56,
                 proteinPercent: 15,
                 fatPercent: 23
-              }
+              },
+              tags: ['당뇨식', '저GI', '고섬유', '혈당관리'],
+              totalPrice: 15000
             };
             break;
             
@@ -717,8 +737,9 @@ export default function ChatScreen() {
               name: '케토 새우 아보카도 볶음',
               description: '저탄수화물 고지방 케톤 다이어트에 완벽한 새우 아보카도 요리입니다. 신선한 새우와 크리미한 아보카도의 조화가 일품입니다.',
               cookingTime: 15,
-              calories: 420,
-              steps: [
+              difficulty: 'easy' as const,
+              servings: 2,
+              instructions: [
                 '새우는 껍질을 벗기고 내장을 제거한 후 깨끗이 씻어주세요',
                 '아보카도는 반으로 갈라 씨를 제거하고 한 입 크기로 썰어주세요',
                 '팬에 버터를 두르고 중불에서 녹여주세요',
@@ -781,7 +802,9 @@ export default function ChatScreen() {
                 carbsPercent: 7,
                 proteinPercent: 23,
                 fatPercent: 70
-              }
+              },
+              tags: ['케토', '고지방', '저탄수화물', '오메가3'],
+              totalPrice: 23400
             };
         }
         
@@ -907,11 +930,11 @@ export default function ChatScreen() {
                   <div className="grid grid-cols-2 gap-4 mb-6">
                     <div className="text-center p-3 bg-orange-50 rounded-lg">
                       <p className="text-sm text-gray-600">조리시간</p>
-                      <p className="text-lg font-semibold text-orange-600">{currentRecipe.cookingTime}</p>
+                      <p className="text-lg font-semibold text-orange-600">{currentRecipe.cookingTime}분</p>
                     </div>
                     <div className="text-center p-3 bg-orange-50 rounded-lg">
                       <p className="text-sm text-gray-600">칼로리</p>
-                      <p className="text-lg font-semibold text-orange-600">{currentRecipe.calories}kcal</p>
+                      <p className="text-lg font-semibold text-orange-600">{currentRecipe.nutrition?.calories}kcal</p>
                     </div>
                   </div>
 
@@ -1006,7 +1029,9 @@ export default function ChatScreen() {
                       <h4 className="font-semibold text-gray-800 mb-4">필요한 재료</h4>
                       
                       {currentRecipe.ingredients.map((ingredient, index) => {
-                        const minPrice = Math.min(...ingredient.prices.map(p => p.price));
+                        const minPrice = ingredient.prices && ingredient.prices.length > 0 
+                          ? Math.min(...ingredient.prices.map(p => p.price))
+                          : ingredient.price || 0;
                         const isChecked = checkedItems[ingredient.name] || false;
                         
                         return (
@@ -1025,25 +1050,36 @@ export default function ChatScreen() {
                             </div>
                             
                             <div className="ml-7 space-y-2">
-                              {ingredient.prices.map((priceInfo, priceIndex) => (
-                                <div key={priceIndex} className="flex justify-between items-center">
-                                  <span className="text-sm text-gray-600">{priceInfo.vendor}</span>
-                                  <div className="flex items-center">
-                                    <span className={`font-medium ${
-                                      priceInfo.price === minPrice 
-                                        ? 'text-orange-600' 
-                                        : 'text-gray-500'
-                                    }`}>
-                                      {formatPrice(priceInfo.price)}
-                                    </span>
-                                    {priceInfo.price === minPrice && (
-                                      <span className="ml-2 text-xs bg-orange-100 text-orange-600 px-2 py-1 rounded-full">
-                                        👑 최저가
+                              {ingredient.prices && ingredient.prices.length > 0 ? (
+                                ingredient.prices.map((priceInfo, priceIndex) => (
+                                  <div key={priceIndex} className="flex justify-between items-center">
+                                    <span className="text-sm text-gray-600">{priceInfo.vendor}</span>
+                                    <div className="flex items-center">
+                                      <span className={`font-medium ${
+                                        priceInfo.price === minPrice 
+                                          ? 'text-orange-600' 
+                                          : 'text-gray-500'
+                                      }`}>
+                                        {formatPrice(priceInfo.price)}
                                       </span>
-                                    )}
+                                      {priceInfo.price === minPrice && (
+                                        <span className="ml-2 text-xs bg-orange-100 text-orange-600 px-2 py-1 rounded-full">
+                                          👑 최저가
+                                        </span>
+                                      )}
+                                    </div>
                                   </div>
+                                ))
+                              ) : ingredient.price ? (
+                                <div className="flex justify-between items-center">
+                                  <span className="text-sm text-gray-600">{ingredient.store || '온라인'}</span>
+                                  <span className="text-sm font-medium text-orange-600">
+                                    {formatPrice(ingredient.price)}
+                                  </span>
                                 </div>
-                              ))}
+                              ) : (
+                                <div className="text-sm text-gray-500">가격 정보 없음</div>
+                              )}
                             </div>
                           </div>
                         );

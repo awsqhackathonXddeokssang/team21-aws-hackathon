@@ -15,7 +15,11 @@ export interface TargetInfo {
 export interface Ingredient {
   name: string;
   amount: string;
-  prices: Array<{vendor: string; price: number}>;
+  unit?: string;  // ResultModal에서 사용
+  price?: number;  // ResultModal에서 사용 (단일값)
+  store?: string;  // ResultModal에서 사용
+  url?: string;    // mockData에서 사용
+  prices?: Array<{vendor: string; price: number}>;  // ChatScreen에서 사용
 }
 
 // 영양 정보
