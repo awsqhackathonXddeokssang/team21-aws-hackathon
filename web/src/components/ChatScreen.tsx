@@ -6,6 +6,7 @@ import { targetInfos } from '@/lib/mockData';
 import { Loader2, ChefHat } from 'lucide-react';
 import ResultModal from './ResultModal';
 import { MockApiService } from '@/lib/mockApi';
+import { ApiService } from '@/lib/api';
 
 export default function ChatScreen() {
   const [selectedTarget, setSelectedTarget] = useState<UserTarget | null>(null);
@@ -39,7 +40,7 @@ export default function ChatScreen() {
     const initializeSession = async () => {
       try {
         // 항상 새 세션 생성
-        const sessionData = await MockApiService.startSession();
+        const sessionData = await ApiService.startSession();
         setSessionId(sessionData.sessionId);
         console.log('New session created:', sessionData.sessionId);
       } catch (error) {
