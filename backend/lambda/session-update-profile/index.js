@@ -5,13 +5,27 @@ const dynamodb = new DynamoDBClient({ region: process.env.AWS_REGION });
 const bedrock = new BedrockRuntimeClient({ region: process.env.AWS_REGION });
 
 async function analyzeUserPrompt(userPrompt) {
-    const prompt = `사용자의 다음 텍스트를 분석해서 식단 관련 정보를 JSON 형태로 추출해주세요:
+    const prompt = `다음 사용자 입력을 분석해주세요:
 
 "${userPrompt}"
 
-다음 형태의 JSON으로 응답해주세요:
+먼저 이 입력이 음식, 요리, 식단, 건강, 영양과 관련된 내용인지 판단해주세요.
+
+만약 음식/요리와 관련이 없다면:
 {
-  "health_conditions": ["당뇨", "고혈압" 등 건강 상태],
+  "is_food_related": false,
+  "error": "음식이나 요리와 관련된 내용이 아닙니다"
+}
+
+음식/요리와 관련된 내용이라면:
+{
+  "is_food_related": true,
+  "allergies": ["알레르기 목록"],
+  "dislikes": ["싫어하는 음식 목록"],
+  "nutritionist_consultation": true/false,
+  "dietary_recommendations": ["영양사 권장사항"],
+  "cooking_time_preference": 숫자(분),
+  "health_conditions": ["건강 상태"],
   "taste_preferences": ["매운맛", "단맛" 등 맛 선호도],
   "dietary_considerations": "특별한 식단 고려사항",
   "cooking_preferences": ["간단한 요리", "빠른 조리" 등 요리 선호도],
@@ -41,12 +55,22 @@ JSON만 응답하고 다른 설명은 하지 마세요.`;
         // JSON 부분만 추출
         const jsonMatch = analysisText.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
-            return JSON.parse(jsonMatch[0]);
+            const result = JSON.parse(jsonMatch[0]);
+            
+            // 음식 관련 내용이 아닌 경우 에러 발생
+            if (result.is_food_related === false) {
+                throw new Error('NON_FOOD_RELATED_PROMPT');
+            }
+            
+            return result;
         }
         
         return { other_notes: userPrompt };
     } catch (error) {
         console.error('Bedrock analysis error:', error);
+        if (error.message === 'NON_FOOD_RELATED_PROMPT') {
+            throw error;
+        }
         return { other_notes: userPrompt };
     }
 }
@@ -107,19 +131,33 @@ exports.handler = async (event) => {
 
             // Process userPrompt if provided
             if (userPrompt) {
-                const analyzedInfo = await analyzeUserPrompt(userPrompt);
-                
-                // Initialize additional_info array if it doesn't exist
-                if (!updatedProfile.additional_info) {
-                    updatedProfile.additional_info = [];
-                }
+                try {
+                    const analyzedInfo = await analyzeUserPrompt(userPrompt);
+                    
+                    // Initialize additional_info array if it doesn't exist
+                    if (!updatedProfile.additional_info) {
+                        updatedProfile.additional_info = [];
+                    }
 
-                // Add new analysis to the array
-                updatedProfile.additional_info.push({
-                    timestamp: new Date().toISOString(),
-                    original_prompt: userPrompt,
-                    analyzed_info: analyzedInfo
-                });
+                    // Add new analysis to the array
+                    updatedProfile.additional_info.push({
+                        timestamp: new Date().toISOString(),
+                        original_prompt: userPrompt,
+                        analyzed_info: analyzedInfo
+                    });
+                } catch (error) {
+                    if (error.message === 'NON_FOOD_RELATED_PROMPT') {
+                        return {
+                            statusCode: 400,
+                            headers,
+                            body: JSON.stringify({ 
+                                error: 'NON_FOOD_RELATED_PROMPT',
+                                message: '음식이나 요리와 관련된 내용을 입력해주세요.' 
+                            })
+                        };
+                    }
+                    throw error;
+                }
             }
         }
 
