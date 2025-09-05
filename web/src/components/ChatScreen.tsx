@@ -94,7 +94,7 @@ export default function ChatScreen() {
     setIsLoading(true);
 
     setTimeout(() => {
-      if (currentStep >= 3) {
+      if (currentStep >= 2) {
         // 추가 질문 단계 처리
         if (option === '네, 질문이 있어요') {
           const textInputMessage: ChatMessage = {
@@ -134,10 +134,6 @@ export default function ChatScreen() {
       {
         question: '요리 시간은 얼마나 걸려도 괜찮으신가요?',
         options: ['10분 이내', '30분 이내', '1시간 이내', '시간 상관없음']
-      },
-      {
-        question: '어떤 맛을 선호하시나요?',
-        options: ['담백한 맛', '매콤한 맛', '달콤한 맛', '진한 맛']
       },
       {
         question: '추가로 궁금한 점이나 특별한 요청사항이 있으신가요?',
