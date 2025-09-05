@@ -1,44 +1,48 @@
-# Combine Lambda 구현 완료 문서
+# Combine Lambda 구현 완료 문서 (업데이트됨)
 
-## 구현 상태: ✅ 완료 (100%)
+## 구현 상태: ✅ 완료 (100%) - DynamoDB 상태 관리 추가
 
 **구현 일자**: 2025-09-05  
-**최종 업데이트**: 2025-09-05 16:50 UTC  
+**최종 업데이트**: DynamoDB Best Practice 적용  
 **담당**: api-integration-agent  
-**테스트 상태**: ✅ Step Functions 통합 테스트 완료  
-**배포 상태**: ✅ AWS Lambda 프로덕션 환경 배포됨
-
-## 주요 업데이트 (2025-09-05)
-
-### Step Functions 통합 지원
-- ✅ Step Functions 워크플로우 형식 지원 추가
-- ✅ `{sessionId, recipeResult, pricingResult}` 형식 처리
-- ✅ 기존 레거시 형식들과 호환성 유지
-- ✅ 프로덕션 배포 및 테스트 완료  
+**테스트 상태**: ✅ 통합 테스트 완료  
 
 ## 구현된 파일 구조
 
 ```
 backend/lambda/combine/
-├── index.js                   # 메인 핸들러 (완료)
-└── package.json              # 의존성 관리 (완료)
+├── index.js                   # 메인 핸들러 (DynamoDB 상태 관리 추가)
+└── package.json              # 의존성 관리 (aws-sdk 포함)
 ```
 
-## 핵심 기능 구현 완료
+## 핵심 변경사항
 
-### 1. 메인 핸들러 (`index.js`)
+### 1. DynamoDB 상태 관리 추가
+- **세션 상태 업데이트**: `combining_results` (90%) → `finished` (100%)
+- **최종 결과 저장**: Results 테이블에 통합 결과 저장
+- **에러 처리**: 실패 시 세션 상태를 `failed`로 업데이트
+
+### 2. 메인 핸들러 업데이트 (`index.js`)
 ```javascript
+const AWS = require('aws-sdk');
+const dynamodb = new AWS.DynamoDB.DocumentClient();
+
 exports.handler = async (event) => {
     try {
         console.log('Combine Lambda input:', JSON.stringify(event, null, 2));
+        
+        const sessionId = event.sessionId;
+        
+        // 세션 상태 업데이트: 결합 시작
+        await updateSessionStatus(sessionId, 'processing', 'combining_results', 90);
         
         // 다중 입력 형식 지원
         let recipeResult, priceResult;
         
         if (Array.isArray(event)) {
             [recipeResult, priceResult] = event;
-        } else if (event.priceResult && event.nutritionResult) {
-            recipeResult = event.nutritionResult;
+        } else if (event.priceResult && event.recipeResult) {
+            recipeResult = event.recipeResult;
             priceResult = event.priceResult;
         } else {
             throw new Error('Invalid event format');
@@ -53,11 +57,120 @@ exports.handler = async (event) => {
         
         // 통합 데이터 생성
         const combinedData = {
-            sessionId: extractSessionId(recipeData, priceData),
+            sessionId: sessionId,
             recipe: recipeData.success ? recipeData.data?.recipe : null,
             nutrition: recipeData.success ? recipeData.data?.nutrition : null,
             pricing: priceData.success ? priceData.data : null,
-            totalEstimatedCost: priceData.success ? priceData.data?.recommendations?.totalEstimatedCost : 0
+            totalEstimatedCost: priceData.success ? priceData.data?.recommendations?.totalEstimatedCost : 0,
+            costPerServing: priceData.success ? 
+                (priceData.data?.recommendations?.totalEstimatedCost || 0) / (recipeData.data?.recipe?.servings || 1) : 0,
+            generatedAt: new Date().toISOString(),
+            success: overallSuccess
+        };
+        
+        // 최종 결과 저장
+        await saveFinalResults(sessionId, combinedData);
+        
+        // 세션 상태 업데이트: 완료
+        await updateSessionStatus(sessionId, 'completed', 'finished', 100);
+        
+        return {
+            statusCode: 200,
+            body: combinedData
+        };
+        
+    } catch (error) {
+        console.error('Combine Lambda error:', error);
+        
+        // 에러 시 세션 상태 업데이트
+        if (event.sessionId) {
+            await updateSessionStatus(event.sessionId, 'failed', 'combine_failed', 90, error.message);
+        }
+        
+        return {
+            statusCode: 500,
+            body: {
+                error: error.message,
+                success: false
+            }
+        };
+    }
+};
+
+// DynamoDB 상태 관리 함수들
+async function updateSessionStatus(sessionId, status, phase, progress, error = null) {
+    try {
+        const params = {
+            TableName: 'ai-chef-sessions-dev',
+            Key: { sessionId },
+            UpdateExpression: 'SET #status = :status, #phase = :phase, #progress = :progress, #updatedAt = :updatedAt',
+            ExpressionAttributeNames: {
+                '#status': 'status',
+                '#phase': 'phase',
+                '#progress': 'progress',
+                '#updatedAt': 'updatedAt'
+            },
+            ExpressionAttributeValues: {
+                ':status': status,
+                ':phase': phase,
+                ':progress': progress,
+                ':updatedAt': new Date().toISOString()
+            }
+        };
+        
+        if (error) {
+            params.UpdateExpression += ', #error = :error';
+            params.ExpressionAttributeNames['#error'] = 'error';
+            params.ExpressionAttributeValues[':error'] = error;
+        }
+        
+        await dynamodb.update(params).promise();
+    } catch (err) {
+        console.error('Failed to update session status:', err);
+    }
+}
+
+async function saveFinalResults(sessionId, combinedData) {
+    try {
+        const params = {
+            TableName: 'ai-chef-results-dev',
+            Item: {
+                sessionId,
+                result: combinedData,
+                createdAt: new Date().toISOString(),
+                ttl: Math.floor(Date.now() / 1000) + (7 * 24 * 60 * 60) // 7일 후 만료
+            }
+        };
+        
+        await dynamodb.put(params).promise();
+    } catch (error) {
+        console.error('Failed to save final results:', error);
+        throw error;
+    }
+}
+
+// 기존 파싱 함수들 유지
+function parseStandardResponse(response, type) {
+    // ... 기존 구현 유지 ...
+}
+
+function extractSessionId(recipeData, priceData) {
+    // ... 기존 구현 유지 ...
+}
+```
+
+### 3. 패키지 의존성 업데이트 (`package.json`)
+```json
+{
+  "name": "ai-chef-combine-lambda",
+  "version": "1.0.0",
+  "description": "AI Chef Combine Lambda with DynamoDB state management",
+  "main": "index.js",
+  "dependencies": {
+    "aws-sdk": "^2.1000.0"
+  }
+}
+```
         };
         
         // 에러 정보 수집

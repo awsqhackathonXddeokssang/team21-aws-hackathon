@@ -7,7 +7,7 @@ REGION="us-east-1"
 echo "🚀 Deploying Step Functions to ${REGION}..."
 
 aws cloudformation deploy \
-  --template-file step-functions-only.yaml \
+  --template-file step-functions.yaml \
   --stack-name ${STACK_NAME}-${ENVIRONMENT} \
   --parameter-overrides Environment=${ENVIRONMENT} \
   --capabilities CAPABILITY_IAM \
