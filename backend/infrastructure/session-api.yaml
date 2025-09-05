@@ -80,7 +80,7 @@ Resources:
                       return create_session(event, context)
                   elif http_method == 'GET' and event['resource'] == '/sessions':
                       return list_sessions(event, context)
-                  elif http_method == 'POST' and '/session/' in event['resource']:
+                  elif http_method == 'POST' and '/sessions/' in event['resource']:
                       return process_session(event, context)
                   else:
                       return {
@@ -201,20 +201,12 @@ Resources:
       ParentId: !Ref SessionsResource
       PathPart: 'update'
 
-  # Session Resource
-  SessionResource:
-    Type: AWS::ApiGateway::Resource
-    Properties:
-      RestApiId: !Ref ApiGateway
-      ParentId: !GetAtt ApiGateway.RootResourceId
-      PathPart: 'session'
-
-  # Session ID Resource
+  # Session ID Resource (under sessions)
   SessionIdResource:
     Type: AWS::ApiGateway::Resource
     Properties:
       RestApiId: !Ref ApiGateway
-      ParentId: !Ref SessionResource
+      ParentId: !Ref SessionsResource
       PathPart: '{id}'
 
   # Session Status Resource
@@ -427,7 +419,7 @@ Resources:
       FunctionName: 'arn:aws:lambda:us-east-1:491085385364:function:session-status'
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/GET/session/*/status'
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/GET/sessions/*/status'
 
   # Lambda Permission for API Gateway - Sessions Update
   LambdaApiGatewaySessionsUpdatePermission:
