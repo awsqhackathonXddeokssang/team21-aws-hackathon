@@ -4,12 +4,24 @@ const client = new BedrockRuntimeClient({ region: "us-east-1" });
 
 exports.handler = async (event) => {
     try {
-        const body = JSON.parse(event.body);
+        console.log('Event:', JSON.stringify(event, null, 2));
+        
+        let body;
+        if (typeof event.body === 'string') {
+            body = JSON.parse(event.body);
+        } else {
+            body = event.body || event;
+        }
+        
         const { recipe } = body;
         
         if (!recipe || !recipe.name || !recipe.ingredients) {
             return {
                 statusCode: 400,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                },
                 body: JSON.stringify({ error: "Recipe name and ingredients are required" })
             };
         }
@@ -58,6 +70,10 @@ exports.handler = async (event) => {
         console.error('Error:', error);
         return {
             statusCode: 500,
+            headers: {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            },
             body: JSON.stringify({ error: error.message })
         };
     }
