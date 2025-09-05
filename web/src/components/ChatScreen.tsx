@@ -215,8 +215,7 @@ export default function ChatScreen() {
     return currentRecipe.ingredients
       .filter(ingredient => checkedItems[ingredient.name])
       .reduce((total, ingredient) => {
-        const minPrice = Math.min(...ingredient.prices.map(p => p.price));
-        return total + minPrice;
+        return total + ingredient.price;
       }, 0);
   };
 
