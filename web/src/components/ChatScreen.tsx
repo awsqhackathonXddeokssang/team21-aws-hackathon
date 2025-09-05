@@ -374,8 +374,68 @@ export default function ChatScreen() {
 
   return (
     <div className="h-full bg-white flex flex-col">
-      {/* 헤더 */}
-      <div className="p-4 bg-white border-b border-gray-100 shadow-sm">
+      {/* 로딩 화면 */}
+      {showResult && isLoading && (
+        <div className="flex-1 flex items-center justify-center bg-gradient-to-br from-orange-50 to-orange-100">
+          <div className="text-center">
+            <div className="mb-6">
+              <div className="w-16 h-16 mx-auto mb-4 relative">
+                <div className="absolute inset-0 border-4 border-orange-200 rounded-full"></div>
+                <div className="absolute inset-0 border-4 border-orange-500 rounded-full border-t-transparent animate-spin"></div>
+              </div>
+              <h2 className="text-xl font-semibold text-gray-800 mb-2">맞춤 레시피 생성 중...</h2>
+              <p className="text-gray-600">AI가 최적의 레시피와 최저가 정보를 찾고 있어요</p>
+            </div>
+            <div className="flex justify-center space-x-1">
+              <div className="w-2 h-2 bg-orange-500 rounded-full animate-bounce"></div>
+              <div className="w-2 h-2 bg-orange-500 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+              <div className="w-2 h-2 bg-orange-500 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 레시피 결과 화면 */}
+      {showResult && !isLoading && currentRecipe && (
+        <div className="flex-1 p-4 overflow-y-auto">
+          <div className="max-w-2xl mx-auto">
+            <h2 className="text-2xl font-bold text-gray-800 mb-4">{currentRecipe.name}</h2>
+            <div className="bg-white rounded-lg shadow-lg p-6">
+              <p className="text-gray-600 mb-4">{currentRecipe.description}</p>
+              <div className="grid grid-cols-2 gap-4 mb-6">
+                <div className="text-center p-3 bg-orange-50 rounded-lg">
+                  <p className="text-sm text-gray-600">조리시간</p>
+                  <p className="text-lg font-semibold text-orange-600">{currentRecipe.cookingTime}</p>
+                </div>
+                <div className="text-center p-3 bg-orange-50 rounded-lg">
+                  <p className="text-sm text-gray-600">칼로리</p>
+                  <p className="text-lg font-semibold text-orange-600">{currentRecipe.calories}kcal</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => {
+                  setShowResult(false);
+                  setCurrentRecipe(null);
+                  setMessages([]);
+                  setSelectedTarget(null);
+                  setCurrentStep(0);
+                  setAdditionalQuestions([]);
+                  setConversationPhase('basic');
+                }}
+                className="w-full py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
+              >
+                새로운 레시피 만들기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 채팅 화면 */}
+      {!showResult && (
+        <>
+          {/* 헤더 */}
+          <div className="p-4 bg-white border-b border-gray-100 shadow-sm">
         <div className="flex items-center justify-center mb-3">
           <ChefHat className="w-5 h-5 text-orange-500 mr-2" />
           <h1 className="text-lg font-semibold text-gray-800">AI 셰프 어시스턴트</h1>
@@ -506,6 +566,8 @@ export default function ChatScreen() {
           </div>
         )}
       </div>
+        </>
+      )}
     </div>
   );
 }
