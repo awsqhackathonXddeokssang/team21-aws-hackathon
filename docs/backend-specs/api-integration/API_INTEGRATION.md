@@ -64,7 +64,7 @@ async function createSession() {
 
 사용자 프로필을 제출하고 Step Functions 워크플로우를 시작합니다.
 
-**요청**
+**요청 (기존 구조화된 프로필)**
 ```javascript
 const profile = {
   target: "keto",
@@ -84,11 +84,61 @@ const response = await fetch(`/api/session/${sessionId}/process`, {
 });
 ```
 
+**요청 (자연어 프롬프트 포함)**
+```javascript
+const profileWithPrompt = {
+  target: "keto",
+  budget: 30000,
+  servings: 2,
+  carbLimit: 20,
+  allergies: ["nuts"],
+  cookingTime: 30,
+  userPrompt: "저는 견과류 알레르기가 있고, 매운 음식을 싫어해요. 영양사와 상담을 받았는데 저염식을 권장받았습니다."
+};
+
+const response = await fetch(`/api/session/${sessionId}/process`, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({ profile: profileWithPrompt })
+});
+```
+
 **응답**
 ```json
 {
   "executionId": "exec_xyz789abc123",
   "estimatedTime": 30
+}
+```
+
+**프로필 업데이트 API 응답 (PUT /sessions/{sessionId}/profile)**
+```json
+{
+  "sessionId": "sess_abc123def456",
+  "status": "additional_info_collected",
+  "profile": {
+    "target": "keto",
+    "budget": 30000,
+    "servings": 2,
+    "carbLimit": 20,
+    "allergies": ["nuts"],
+    "cookingTime": 30,
+    "additional_info": [
+      {
+        "timestamp": "2025-09-05T07:54:00Z",
+        "original_prompt": "저는 견과류 알레르기가 있고, 매운 음식을 싫어해요. 영양사와 상담을 받았는데 저염식을 권장받았습니다.",
+        "analyzed_info": {
+          "allergies": ["견과류"],
+          "dislikes": ["매운음식"],
+          "nutritionist_consultation": true,
+          "dietary_recommendations": ["저염식"]
+        }
+      }
+    ]
+  },
+  "updatedAt": "2025-09-05T07:54:00Z"
 }
 ```
 
@@ -118,6 +168,31 @@ async function submitProfile(sessionId, profile) {
     console.error('프로필 제출 실패:', error);
     throw error;
   }
+}
+
+// 자연어 프롬프트 처리 함수 (별도 API 호출)
+async function updateProfileWithPrompt(sessionId, profileData, userPrompt) {
+  const requestBody = {
+    ...profileData,
+    userPrompt: userPrompt
+  };
+
+  const response = await fetch(`/sessions/${sessionId}/profile`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(requestBody)
+  });
+
+  if (!response.ok) {
+    throw new Error(`프로필 업데이트 실패: ${response.status}`);
+  }
+
+  const result = await response.json();
+  console.log('분석된 정보:', result.profile.additional_info);
+  
+  return result;
 }
 ```
 
@@ -373,7 +448,8 @@ class AIChefAPI {
 - `SESSION_NOT_FOUND` (404): 세션을 찾을 수 없음
 - `SESSION_EXPIRED` (410): 세션이 만료됨
 - `PROFILE_INVALID` (400): 프로필 검증 실패
-- `RECIPE_GENERATION_FAILED` (500): Bedrock API 실패
+- `BEDROCK_ANALYSIS_FAILED` (500): Bedrock 텍스트 분석 실패
+- `RECIPE_GENERATION_FAILED` (500): Bedrock 레시피 생성 실패
 - `PRICE_FETCH_FAILED` (500): 네이버 API 실패
 - `PROCESSING_TIMEOUT` (504): 60초 처리 시간 초과
 - `RATE_LIMIT_EXCEEDED` (429): API 호출 제한 초과
@@ -402,7 +478,7 @@ async function handleApiError(error, response, sessionId) {
     case 429: // RATE_LIMIT_EXCEEDED
       throw new Error('요청이 너무 많습니다. 잠시 후 다시 시도해주세요.');
       
-    case 500: // RECIPE_GENERATION_FAILED, PRICE_FETCH_FAILED
+    case 500: // BEDROCK_ANALYSIS_FAILED, RECIPE_GENERATION_FAILED, PRICE_FETCH_FAILED
       return {
         canRetry: true,
         message: '처리 중 오류가 발생했습니다.',

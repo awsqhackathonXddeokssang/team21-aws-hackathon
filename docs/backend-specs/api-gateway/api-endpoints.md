@@ -61,9 +61,9 @@ GET /sessions/{sessionId}
 ### 3. 세션 프로필 업데이트
 **PUT** `/sessions/{sessionId}/profile`
 
-사용자의 추가 선호도 정보를 업데이트합니다.
+사용자의 추가 선호도 정보를 업데이트합니다. Bedrock Claude를 통한 자연어 분석 기능이 추가되었습니다.
 
-**Request:**
+**Request (기존 구조화된 데이터):**
 ```javascript
 const additionalPreferences = {
   preferences: {
@@ -87,11 +87,34 @@ const response = await fetch(`/sessions/${sessionId}/profile`, {
 });
 ```
 
+**Request (자연어 프롬프트 분석):**
+```javascript
+const profileWithPrompt = {
+  // 기존 프로필 정보
+  target: "keto",
+  budget: 30000,
+  servings: 2,
+  carbLimit: 20,
+  allergies: ["nuts"],
+  cookingTime: 30,
+  // 자연어 프롬프트 추가
+  userPrompt: "저는 견과류와 갑각류 알레르기가 있고, 매운 음식을 싫어해요. 영양사와 상담을 받았는데 저염식과 고섬유질 식단을 권장받았습니다. 요리 시간은 45분 정도가 적당해요."
+};
+
+const response = await fetch(`/sessions/${sessionId}/profile`, {
+  method: 'PUT',
+  headers: {
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify(profileWithPrompt)
+});
+```
+
 **Response:**
 ```json
 {
   "sessionId": "sess_abc123def456",
-  "updated": true,
+  "status": "additional_info_collected",
   "profile": {
     "target": "keto",
     "budget": 30000,
@@ -106,8 +129,22 @@ const response = await fetch(`/sessions/${sessionId}/profile`, {
         "hasConsulted": true,
         "recommendations": ["low sodium", "high fiber"]
       }
-    }
-  }
+    },
+    "additional_info": [
+      {
+        "timestamp": "2025-09-05T07:54:00Z",
+        "original_prompt": "저는 견과류와 갑각류 알레르기가 있고...",
+        "analyzed_info": {
+          "allergies": ["견과류", "갑각류"],
+          "dislikes": ["매운음식"],
+          "nutritionist_consultation": true,
+          "dietary_recommendations": ["저염식", "고섬유질"],
+          "cooking_time_preference": 45
+        }
+      }
+    ]
+  },
+  "updatedAt": "2025-09-05T07:54:00Z"
 }
 ```
 
