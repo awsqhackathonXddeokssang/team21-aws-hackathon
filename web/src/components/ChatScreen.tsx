@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { UserTarget, ChatMessage, Recipe } from '@/types';
 import { targetInfos } from '@/lib/mockData';
-import { Loader2 } from 'lucide-react';
+import { Loader2, ChefHat } from 'lucide-react';
 import ResultModal from './ResultModal';
 import { MockApiService } from '@/lib/mockApi';
 
@@ -143,14 +143,21 @@ export default function ChatScreen() {
 
   return (
     <div className="h-full bg-white flex flex-col">
-      {/* 헤더 추가 */}
-      <div className="flex items-center p-4 bg-white border-b border-gray-100">
-        <div className="w-10 h-10 bg-orange-500 rounded-full flex items-center justify-center">
-          <span className="text-white text-lg">👨🍳</span>
+      {/* 헤더 */}
+      <div className="p-4 bg-white border-b border-gray-100 shadow-sm">
+        <div className="flex items-center justify-center mb-3">
+          <ChefHat className="w-5 h-5 text-orange-500 mr-2" />
+          <h1 className="text-lg font-semibold text-gray-800">AI 셰프 어시스턴트</h1>
         </div>
-        <div className="ml-3">
-          <h2 className="font-semibold text-gray-800 text-sm">AI 셰프</h2>
-          <p className="text-xs text-gray-500">맞춤형 레시피 추천</p>
+        <div className="flex justify-center space-x-2">
+          {[0, 1, 2].map((step) => (
+            <div
+              key={step}
+              className={`w-16 h-1 rounded-full ${
+                step <= currentStep ? 'bg-orange-500' : 'bg-gray-200'
+              }`}
+            />
+          ))}
         </div>
       </div>
 
