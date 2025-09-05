@@ -177,7 +177,7 @@ export default function ChatScreen() {
                   <button
                     key={target.id}
                     onClick={() => handleTargetSelect(target.id)}
-                    className="py-3 px-4 rounded-lg bg-white hover:bg-orange-50 hover:border-orange-400 border border-gray-200 transition-colors duration-200 text-left"
+                    className="py-3 px-4 rounded-lg bg-gray-100 hover:bg-orange-100 hover:border-orange-300 border border-gray-300 transition-colors duration-200 text-left"
                   >
                     <div className="flex items-center">
                       <span className="text-xl mr-3">{target.icon}</span>
@@ -199,7 +199,7 @@ export default function ChatScreen() {
                   <button
                     key={index}
                     onClick={() => handleOptionSelect(option)}
-                    className="py-3 px-4 rounded-lg bg-white hover:bg-orange-50 hover:border-orange-400 border border-gray-200 transition-colors duration-200 text-left"
+                    className="py-3 px-4 rounded-lg bg-gray-100 hover:bg-orange-100 hover:border-orange-300 border border-gray-300 transition-colors duration-200 text-left"
                   >
                     <span className="text-sm font-medium text-gray-800">{option}</span>
                   </button>
