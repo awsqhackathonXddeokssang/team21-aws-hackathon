@@ -38,19 +38,31 @@ export default function ChatScreen() {
   // 세션 초기화
   useEffect(() => {
     console.log('🚀 ChatScreen useEffect 시작');
+    
+    // 새로고침 시 로컬 스토리지 클리어
+    localStorage.clear();
+    console.log('🗑️ 로컬 스토리지 클리어 완료');
+    
     const initializeSession = async () => {
       try {
         console.log('📞 세션 생성 API 호출 시작...');
         // 항상 새 세션 생성
         const sessionData = await ApiService.startSession();
         console.log('✅ 세션 생성 성공:', sessionData);
+        
+        // 서버에서 받은 세션 ID를 state와 localStorage에 저장
         setSessionId(sessionData.sessionId);
+        localStorage.setItem('sessionId', sessionData.sessionId);
+        localStorage.setItem('sessionData', JSON.stringify(sessionData));
+        
         console.log('💾 SessionId 저장 완료:', sessionData.sessionId);
+        console.log('💾 로컬 스토리지 저장 완료');
       } catch (error) {
         console.error('❌ 세션 초기화 실패:', error);
         // Fallback: 임시 세션 ID 생성
         const fallbackId = `temp-${Date.now()}`;
         setSessionId(fallbackId);
+        localStorage.setItem('sessionId', fallbackId);
         console.log('🔄 Fallback session created:', fallbackId);
       }
     };
