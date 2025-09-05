@@ -36,12 +36,16 @@ export class ApiService {
 
   static async startSession(): Promise<SessionResponse> {
     try {
+      console.log('🌐 API 호출 시작 - startSession');
       const url = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.SESSIONS}`;
+      console.log('📍 API URL:', url);
       
       const response = await this.fetchWithTimeout(url, {
         method: 'POST',
         body: JSON.stringify({}),
       });
+
+      console.log('📡 API 응답 상태:', response.status, response.statusText);
 
       if (!response.ok) {
         throw new ApiError(response.status, `HTTP ${response.status}: ${response.statusText}`);
@@ -49,10 +53,10 @@ export class ApiService {
 
       const data = await response.json();
       
-      console.log('Real API Session Created:', data);
+      console.log('✅ Real API Session Created:', data);
       return data;
     } catch (error) {
-      console.error('Session creation failed:', error);
+      console.error('❌ Session creation failed:', error);
       throw error;
     }
   }

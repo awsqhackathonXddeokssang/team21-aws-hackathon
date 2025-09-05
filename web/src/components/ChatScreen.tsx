@@ -37,21 +37,25 @@ export default function ChatScreen() {
 
   // 세션 초기화
   useEffect(() => {
+    console.log('🚀 ChatScreen useEffect 시작');
     const initializeSession = async () => {
       try {
+        console.log('📞 세션 생성 API 호출 시작...');
         // 항상 새 세션 생성
         const sessionData = await ApiService.startSession();
+        console.log('✅ 세션 생성 성공:', sessionData);
         setSessionId(sessionData.sessionId);
-        console.log('New session created:', sessionData.sessionId);
+        console.log('💾 SessionId 저장 완료:', sessionData.sessionId);
       } catch (error) {
-        console.error('세션 초기화 실패:', error);
+        console.error('❌ 세션 초기화 실패:', error);
         // Fallback: 임시 세션 ID 생성
         const fallbackId = `temp-${Date.now()}`;
         setSessionId(fallbackId);
-        console.log('Fallback session created:', fallbackId);
+        console.log('🔄 Fallback session created:', fallbackId);
       }
     };
     
+    console.log('🎯 initializeSession 함수 호출');
     initializeSession();
   }, []);
 
