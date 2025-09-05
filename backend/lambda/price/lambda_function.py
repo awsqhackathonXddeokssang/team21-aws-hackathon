@@ -77,6 +77,11 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
         
         # 세션 상태 업데이트 (진행률 50%)
         update_session_status(session_id, 'price_processing', 50)
+        sessions_table.update_item(
+            Key={'sessionId': session_id},
+            UpdateExpression='SET priceStatus = :status',
+            ExpressionAttributeValues={':status': 'processing'}
+        )
         
         # 재료별 가격 조회
         price_results = {}
@@ -92,6 +97,11 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
         
         # 세션 상태 완료 (진행률 80%)
         update_session_status(session_id, 'price_completed', 80)
+        sessions_table.update_item(
+            Key={'sessionId': session_id},
+            UpdateExpression='SET priceStatus = :status',
+            ExpressionAttributeValues={':status': 'completed'}
+        )
         
         return {
             'statusCode': 200,
@@ -102,6 +112,12 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
     except Exception as e:
         print(f'Price Lambda error: {e}')
         update_session_status(session_id, 'price_failed', 50, str(e))
+        if session_id:
+            sessions_table.update_item(
+                Key={'sessionId': session_id},
+                UpdateExpression='SET priceStatus = :status',
+                ExpressionAttributeValues={':status': 'failed'}
+            )
         return {
             'statusCode': 500,
             'body': {'error': str(e), 'success': False}
