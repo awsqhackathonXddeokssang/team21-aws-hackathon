@@ -67,7 +67,10 @@ export class ApiService {
       const url = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.UPDATE}`;
       console.log('📍 API URL:', url);
       
-      const requestBody: any = { ...profile };
+      const requestBody: any = { 
+        sessionId,
+        ...profile 
+      };
       if (userPrompt) {
         requestBody.userPrompt = userPrompt;
       }
@@ -89,6 +92,33 @@ export class ApiService {
       return data;
     } catch (error) {
       console.error('❌ Profile update failed:', error);
+      throw error;
+    }
+  }
+
+  static async processRecipe(sessionId: string): Promise<any> {
+    try {
+      console.log('🍳 API 호출 시작 - processRecipe');
+      const url = `${API_CONFIG.BASE_URL}/process`;
+      console.log('📍 API URL:', url);
+      
+      const response = await this.fetchWithTimeout(url, {
+        method: 'POST',
+        body: JSON.stringify({ sessionId }),
+      });
+
+      console.log('📡 API 응답 상태:', response.status, response.statusText);
+
+      if (!response.ok) {
+        throw new ApiError(response.status, `HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      
+      console.log('✅ Recipe Processing Started:', data);
+      return data;
+    } catch (error) {
+      console.error('❌ Recipe processing failed:', error);
       throw error;
     }
   }

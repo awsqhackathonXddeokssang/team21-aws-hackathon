@@ -8,18 +8,23 @@ Step Functions를 통한 순차적 레시피 생성 및 가격 조회 처리 과
 
 ```mermaid
 sequenceDiagram
+    participant API as API Gateway
+    participant PL as Process Lambda
     participant SF as Step Functions
     participant RL as Recipe Lambda
-    participant PL as Price Lambda
+    participant PrL as Price Lambda
     participant CL as Combine Lambda
     participant BR as Bedrock (Claude Opus 4.1)
     participant NA as Naver API
     participant DB as DynamoDB
 
-    Note over SF, DB: Phase 3: 순차 처리 워크플로우 (Session Lambda 시작)
+    Note over API, DB: Phase 3: Process Lambda가 워크플로우 시작
     
-    %% Session Lambda가 Step Functions 시작 (API Gateway에서)
-    Note over SF: Session Lambda가 워크플로우 시작
+    %% Process Lambda가 Step Functions 시작
+    API->>PL: POST /session/{id}/process
+    PL->>DB: 프로필 검증 및 상태 업데이트
+    PL->>SF: Step Functions 워크플로우 시작
+    PL-->>API: executionId 반환
     
     %% 1. 레시피 생성 (10% → 50%)
     SF->>RL: GenerateRecipe (profile 전달)
@@ -32,13 +37,13 @@ sequenceDiagram
     RL-->>SF: RecipeResult 반환
     
     %% 2. 가격 조회 (50% → 80%)
-    SF->>PL: FetchPrices (재료 목록 전달)
-    PL->>DB: 상태 업데이트 (price_lookup, 60%)
-    PL->>NA: 재료별 최저가 검색 (병렬)
+    SF->>PrL: FetchPrices (재료 목록 전달)
+    PrL->>DB: 상태 업데이트 (price_lookup, 60%)
+    PrL->>NA: 재료별 최저가 검색 (병렬)
     Note over NA: 네이버 쇼핑 API 실시간 조회
-    NA-->>PL: 가격 정보 반환
-    PL->>DB: 상태 업데이트 (price_completed, 80%)
-    PL-->>SF: PricingResult 반환
+    NA-->>PrL: 가격 정보 반환
+    PrL->>DB: 상태 업데이트 (price_completed, 80%)
+    PrL-->>SF: PricingResult 반환
     
     %% 3. 결과 합성 (80% → 100%)
     SF->>CL: CombineResults (레시피 + 가격)
@@ -123,6 +128,81 @@ sequenceDiagram
 ```
 
 ## Lambda별 상세 구현
+
+### 0. Process Lambda (세션 처리 및 워크플로우 시작)
+
+#### 프로필 검증 및 Step Functions 시작
+```python
+def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
+    """Process Lambda - 세션 처리 및 워크플로우 시작"""
+    try:
+        session_id = event['pathParameters']['id']
+        body = json.loads(event['body'])
+        user_profile = body.get('userProfile')
+        
+        logger.info(f"Processing session: {session_id}")
+        
+        # 1. 세션 상태 검증
+        session = validate_session(session_id)
+        if not session:
+            return create_error_response(404, "SESSION_NOT_FOUND", "세션을 찾을 수 없습니다.")
+        
+        # 2. 프로필 유효성 검사
+        validation_result = validate_user_profile(user_profile)
+        if not validation_result['valid']:
+            return create_error_response(400, "INVALID_PROFILE", validation_result['message'])
+        
+        # 3. 프로필 데이터 저장 및 상태 업데이트
+        update_session_with_profile(session_id, user_profile)
+        
+        # 4. Step Functions 워크플로우 시작
+        execution_arn = start_workflow(session_id, user_profile)
+        
+        # 5. 실행 정보 저장
+        save_execution_info(session_id, execution_arn)
+        
+        return create_success_response(execution_arn, 30)
+        
+    except Exception as e:
+        logger.error(f"Process error: {str(e)}")
+        return create_error_response(500, "INTERNAL_ERROR", "서버 내부 오류가 발생했습니다.")
+
+def start_workflow(session_id: str, user_profile: Dict[str, Any]) -> str:
+    """Step Functions 워크플로우 시작"""
+    workflow_input = {
+        'sessionId': session_id,
+        'profile': transform_profile_for_workflow(user_profile)
+    }
+    
+    response = stepfunctions.start_execution(
+        stateMachineArn='arn:aws:states:us-east-1:491085385364:stateMachine:ai-chef-workflow',
+        name=f'execution-{int(datetime.now().timestamp())}',
+        input=json.dumps(workflow_input)
+    )
+    
+    return response['executionArn']
+
+def transform_profile_for_workflow(user_profile: Dict[str, Any]) -> Dict[str, Any]:
+    """사용자 프로필을 워크플로우 형식으로 변환"""
+    responses = user_profile.get('responses', {})
+    target = user_profile.get('target')
+    
+    workflow_profile = {
+        'target': target,
+        'budget': int(responses.get('100', 20000)),
+        'servings': int(responses.get('101', 2))
+    }
+    
+    # 타겟별 프로필 변환
+    if target == 'keto':
+        workflow_profile.update({
+            'healthConditions': [responses.get('1', '')] if responses.get('1') else [],
+            'allergies': [responses.get('2', '')] if responses.get('2') else [],
+            'cookingLevel': responses.get('3', 'beginner')
+        })
+    
+    return workflow_profile
+```
 
 ### 1. Recipe Lambda (Python 3.11)
 
@@ -450,12 +530,14 @@ def handle_naver_api_error(error: Exception, ingredient: Dict[str, Any]) -> Dict
 ## 실제 배포 정보
 
 ### 배포된 리소스
-- **Step Functions**: `arn:aws:states:us-east-1:491085385364:stateMachine:ai-chef-workflow-dev`
+- **Step Functions**: `arn:aws:states:us-east-1:491085385364:stateMachine:ai-chef-workflow`
+- **Process Lambda**: `arn:aws:lambda:us-east-1:491085385364:function:ai-chef-process-dev`
 - **Recipe Lambda**: `arn:aws:lambda:us-east-1:491085385364:function:ai-chef-recipe-dev`
 - **Price Lambda**: `arn:aws:lambda:us-east-1:491085385364:function:ai-chef-price-dev` (예정)
 - **Combine Lambda**: `arn:aws:lambda:us-east-1:491085385364:function:ai-chef-combine-dev` (예정)
 - **Sessions Table**: `ai-chef-sessions-dev`
 - **Results Table**: `ai-chef-results-dev` (예정)
+- **API Gateway**: `https://jkyyb2tqm0.execute-api.us-east-1.amazonaws.com/dev`
 
 ### 모니터링 및 로깅
 ```bash
@@ -472,9 +554,25 @@ aws stepfunctions describe-execution \
 
 ### 테스트 실행
 ```bash
-# Step Functions 워크플로우 시작
+# Process Lambda를 통한 워크플로우 시작
+curl -X POST "https://jkyyb2tqm0.execute-api.us-east-1.amazonaws.com/dev/session/sess_test_789/process" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userProfile": {
+      "target": "keto",
+      "responses": {
+        "1": "diabetes",
+        "2": "",
+        "3": "beginner", 
+        "100": "30000",
+        "101": "2"
+      }
+    }
+  }'
+
+# Step Functions 직접 실행 (개발용)
 aws stepfunctions start-execution \
-  --state-machine-arn arn:aws:states:us-east-1:491085385364:stateMachine:ai-chef-workflow-dev \
+  --state-machine-arn arn:aws:states:us-east-1:491085385364:stateMachine:ai-chef-workflow \
   --input '{
     "sessionId": "sess_test_789",
     "profile": {
