@@ -1,7 +1,7 @@
 # Phase 1: 세션 초기화 시퀀스
 
 ## 개요
-사용자가 앱에 접속하여 세션을 생성하는 초기화 과정
+사용자가 앱에 접속할 때마다 새로운 세션을 생성하는 초기화 과정
 
 ## 시퀀스 다이어그램
 
@@ -17,50 +17,34 @@ sequenceDiagram
     Note over User, DynamoDB: Phase 1: 세션 초기화
 
     User->>Frontend: 앱 접속
-    Frontend->>Frontend: localStorage에서 sessionId 확인
+    Frontend->>MockApiService: startSession() 호출 (항상 새 세션)
+    MockApiService->>API Gateway: POST /session/start
+    API Gateway->>Lambda: 세션 생성 요청
+    Lambda->>Lambda: sessionId 생성 (서버에서만)
+    Lambda->>DynamoDB: sessionId 및 메타데이터 저장 (TTL 2시간)
     
-    alt sessionId 없음 또는 만료
-        Frontend->>MockApiService: startSession() 호출
-        MockApiService->>API Gateway: POST /session/start
-        API Gateway->>Lambda: 세션 생성 요청
-        Lambda->>Lambda: sessionId 생성 (서버에서만)
-        Lambda->>DynamoDB: sessionId 및 메타데이터 저장 (TTL 2시간)
-        
-        Note over Lambda: 세션 ID 형식: sess-{timestamp}-{random}
-        Note over Lambda: STATUS: 'idle'로 시작
-        
-        DynamoDB-->>Lambda: 저장 완료
-        Lambda-->>API Gateway: sessionId, createdAt, expiresAt 반환
-        API Gateway-->>MockApiService: 세션 데이터 반환
-        MockApiService-->>Frontend: sessionId 반환
-        Frontend->>Frontend: localStorage에 sessionId 저장
-        Frontend-->>User: 세션 준비 완료
-    else sessionId 유효
-        Note over Frontend: 기존 세션 사용 (서버 검증 생략)
-        Frontend-->>User: 세션 복원 완료
-    end
+    Note over Lambda: 세션 ID 형식: sess-{timestamp}-{random}
+    Note over Lambda: STATUS: 'idle'로 시작
+    
+    DynamoDB-->>Lambda: 저장 완료
+    Lambda-->>API Gateway: sessionId, createdAt, expiresAt 반환
+    API Gateway-->>MockApiService: 세션 데이터 반환
+    MockApiService-->>Frontend: sessionId 반환
+    Frontend->>Frontend: sessionId 상태에 저장 (localStorage 사용 안 함)
+    Frontend-->>User: 새 대화 시작
 ```
 
 ## 상세 플로우
 
 ### 1. 앱 접속
 - 사용자가 웹 애플리케이션에 접속
-- Frontend 컴포넌트 마운트 시 세션 초기화 시작
+- Frontend 컴포넌트 마운트 시 무조건 새 세션 생성
 
-### 2. 기존 세션 확인
+### 2. 새 세션 생성 (항상)
 ```javascript
-// localStorage에서 기존 세션 확인
-const savedSessionId = localStorage.getItem('sessionId');
-const sessionExpiry = localStorage.getItem('sessionExpiry');
-
-if (savedSessionId && sessionExpiry && new Date(sessionExpiry) > new Date()) {
-    // 유효한 세션 존재 - 서버 검증 필요시 추가 호출
-    return savedSessionId;
-} else {
-    // 새 세션 생성 필요
-    const sessionData = await MockApiService.startSession();
-    return sessionData.sessionId;
-}
+// 기존 세션 확인 없이 항상 새 세션 생성
+const sessionData = await MockApiService.startSession();
+return sessionData.sessionId;
 ```
 
 ### 3. 새 세션 생성 요청
@@ -106,14 +90,14 @@ export const startSession = async (): Promise<SessionResponse> => {
 
 ### 7. Frontend 저장
 ```javascript
-// ChatScreen useEffect 수정
+// ChatScreen useEffect 수정 - localStorage 사용 안 함
 useEffect(() => {
   const initializeSession = async () => {
     try {
+      // 항상 새 세션 생성
       const sessionData = await MockApiService.startSession();
       setSessionId(sessionData.sessionId);
-      localStorage.setItem('sessionId', sessionData.sessionId);
-      localStorage.setItem('sessionExpiry', sessionData.expiresAt);
+      console.log('New session created:', sessionData.sessionId);
     } catch (error) {
       console.error('세션 초기화 실패:', error);
       // Fallback: 클라이언트 임시 세션
@@ -130,9 +114,10 @@ useEffect(() => {
 
 ### Frontend 역할
 - **세션 API 호출**: `MockApiService.startSession()` 호출
-- **응답 저장**: 받은 sessionId를 localStorage에 저장
+- **상태 저장**: 받은 sessionId를 컴포넌트 상태에만 저장
 - **세션 사용**: 이후 모든 API 호출에 sessionId 포함
 - **sessionId 생성 안 함**: 서버에서만 생성
+- **localStorage 사용 안 함**: 매번 새 대화 시작
 
 ### 서버 역할 (Mock/실제)
 - **sessionId 생성**: 고유한 세션 ID 생성

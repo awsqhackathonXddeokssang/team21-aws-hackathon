@@ -38,22 +38,10 @@ export default function ChatScreen() {
   useEffect(() => {
     const initializeSession = async () => {
       try {
-        // 기존 세션 확인
-        const savedSessionId = localStorage.getItem('sessionId');
-        const sessionExpiry = localStorage.getItem('sessionExpiry');
-        
-        if (savedSessionId && sessionExpiry && new Date(sessionExpiry) > new Date()) {
-          // 유효한 세션 존재
-          setSessionId(savedSessionId);
-          console.log('Existing session restored:', savedSessionId);
-        } else {
-          // 새 세션 생성
-          const sessionData = await MockApiService.startSession();
-          setSessionId(sessionData.sessionId);
-          localStorage.setItem('sessionId', sessionData.sessionId);
-          localStorage.setItem('sessionExpiry', sessionData.expiresAt);
-          console.log('New session created:', sessionData.sessionId);
-        }
+        // 항상 새 세션 생성
+        const sessionData = await MockApiService.startSession();
+        setSessionId(sessionData.sessionId);
+        console.log('New session created:', sessionData.sessionId);
       } catch (error) {
         console.error('세션 초기화 실패:', error);
         // Fallback: 임시 세션 ID 생성
