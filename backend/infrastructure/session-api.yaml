@@ -44,7 +44,7 @@ Resources:
   SessionLambda:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub 'ai-chef-session-${Environment}'
+      FunctionName: !Sub 'ai-chef-session-api-${Environment}'
       Runtime: python3.11
       Handler: lambda_function.lambda_handler
       Role: !GetAtt SessionLambdaRole.Arn
@@ -284,7 +284,7 @@ Resources:
       FunctionName: !Ref SessionLambda
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub '${ApiGateway}/*/GET/sessions'
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/GET/sessions'
 
   # Lambda Permission for API Gateway - Sessions POST
   LambdaApiGatewaySessionsPostPermission:
@@ -293,7 +293,7 @@ Resources:
       FunctionName: !Ref SessionLambda
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub '${ApiGateway}/*/POST/sessions'
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/POST/sessions'
 
   # Lambda Permission for API Gateway
   LambdaApiGatewayPermission:
@@ -302,7 +302,7 @@ Resources:
       FunctionName: !Ref SessionLambda
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub '${ApiGateway}/*/POST/session/*/process'
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/POST/session/*/process'
 
   # API Deployment
   ApiDeployment:
