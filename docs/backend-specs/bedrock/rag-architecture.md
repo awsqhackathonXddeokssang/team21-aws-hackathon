@@ -1,12 +1,13 @@
-# 엑셀 데이터 기반 RAG 시스템 AWS 아키텍처
+# 엑셀 데이터 기반 RAG 시스템 AWS 아키텍처 (업데이트됨)
 
 ## 개요
 133,569건의 가공식품 데이터와 3,309건의 국가표준식품성분표 엑셀 데이터를 활용한 RAG 시스템 설계
+**Claude Opus 4.1 및 Python Lambda 기반 구현**
 
-## 시스템 아키텍처
+## 시스템 아키텍처 (업데이트됨)
 
 ```
-[Excel Files] → [S3] → [Lambda/Glue] → [Bedrock Embeddings] → [OpenSearch] → [Bedrock LLM] → [API Gateway]
+[Excel Files] → [S3] → [Lambda/Glue] → [Bedrock Embeddings] → [OpenSearch] → [Claude Opus 4.1] → [Recipe Lambda]
 ```
 
 ## AWS 서비스 구성
@@ -27,7 +28,62 @@
       └── vectors/
   ```
 
-### 2. 데이터 전처리 (Lambda + Glue)
+### 2. AI 모델 (Bedrock - 업데이트됨)
+- **모델**: Claude Opus 4.1 (`anthropic.claude-opus-4-1-20250805-v1:0`)
+- **언어**: Python 3.11
+- **용도**: 
+  - 레시피 생성 (타겟별 맞춤 프롬프트)
+  - 영양소 정보 해석
+  - 식단 추천 및 검증
+- **특징**:
+  - 향상된 추론 능력
+  - 더 정확한 JSON 파싱
+  - 한국어 처리 개선
+
+### 3. Recipe Lambda 통합 (신규)
+```python
+# Recipe Lambda에서 RAG 시스템 활용
+def get_nutrition_info(ingredients: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """RAG 시스템을 통한 영양소 조회"""
+    nutrition_data = []
+    
+    for ingredient in ingredients:
+        # 1. 재료명 정규화
+        clean_name = clean_ingredient_name(ingredient['name'])
+        
+        # 2. OpenSearch 임베딩 검색
+        nutrition = search_nutrition_database(clean_name)
+        
+        # 3. 양에 따른 영양소 계산
+        calculated_nutrition = calculate_nutrition_by_amount(
+            nutrition, 
+            float(ingredient.get('amount', 1)), 
+            ingredient.get('unit', '개')
+        )
+        
+        nutrition_data.append({
+            'ingredient': ingredient['name'],
+            'nutrition': calculated_nutrition
+        })
+    
+    return nutrition_data
+
+def search_nutrition_database(ingredient_name: str) -> Dict[str, float]:
+    """OpenSearch를 통한 영양소 데이터 검색"""
+    # Mock 구현 - 실제로는 OpenSearch 쿼리
+    nutrition_db = {
+        '아보카도': {'calories': 160, 'protein': 2, 'fat': 15, 'carbs': 9, 'fiber': 7},
+        '올리브오일': {'calories': 884, 'protein': 0, 'fat': 100, 'carbs': 0, 'fiber': 0},
+        '닭가슴살': {'calories': 165, 'protein': 31, 'fat': 3.6, 'carbs': 0, 'fiber': 0},
+        '브로콜리': {'calories': 34, 'protein': 2.8, 'fat': 0.4, 'carbs': 7, 'fiber': 2.6}
+    }
+    
+    return nutrition_db.get(ingredient_name, {
+        'calories': 50, 'protein': 2, 'fat': 1, 'carbs': 10, 'fiber': 1
+    })
+```
+
+### 4. 데이터 전처리 (Lambda + Glue)
 - **서비스**: AWS Lambda, AWS Glue
 - **Lambda 함수**: `excel-processor`
   - 엑셀 파일 파싱 및 JSON 변환

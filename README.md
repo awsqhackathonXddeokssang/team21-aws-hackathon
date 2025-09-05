@@ -68,7 +68,7 @@ Amazon Q Developer Hackathon으로 구현한 개인 맞춤형 AI 레시피 추�
 - 환경변수 설정 가이드
 - 리소스 정리 방법
 
-### AWS 아키텍처
+### AWS 아키텍처 (업데이트됨)
 
 ```mermaid
 graph TD
@@ -76,18 +76,18 @@ graph TD
     Web --> API[API Gateway]
     API --> SF[Step Functions<br/>워크플로우]
     
-    SF --> Orch[Orchestrator Lambda<br/>세션 관리]
-    Orch --> DDB[(DynamoDB<br/>세션 저장)]
-    
-    SF --> Recipe[Recipe Lambda<br/>Bedrock AI]
+    SF --> Orch[Orchestrator Lambda<br/>세션 초기화]
+    SF --> Recipe[Recipe Lambda<br/>Claude Opus 4.1]
     SF --> Price[Price Lambda<br/>네이버 쇼핑 API]
     SF --> Combine[Combine Lambda<br/>결과 합성]
     
-    Recipe --> Bedrock[AWS Bedrock<br/>Claude 3]
-    Price --> Naver[네이버 쇼핑 API]
+    Recipe --> DDB[(DynamoDB<br/>세션 상태)]
+    Price --> DDB
+    Combine --> DDB
+    Combine --> Results[(DynamoDB<br/>최종 결과)]
     
-    Combine --> Result[최종 결과<br/>레시피 + 가격]
-    Result --> Web
+    Recipe --> Bedrock[AWS Bedrock<br/>Claude Opus 4.1]
+    Price --> Naver[네이버 쇼핑 API]
     
     style Web fill:#e1f5fe
     style SF fill:#f3e5f5
@@ -95,7 +95,25 @@ graph TD
     style Price fill:#fff3e0
     style Combine fill:#fce4ec
     style DDB fill:#f1f8e9
+    style Results fill:#f1f8e9
 ```
+
+### 핵심 아키텍처 변경사항
+
+#### 1. Lambda 기반 상태 관리 (Best Practice)
+- **기존**: Step Functions에서 DynamoDB 직접 호출
+- **개선**: 각 Lambda가 DynamoDB 상태 직접 관리
+- **장점**: 관심사 분리, 에러 처리 개선, 유지보수성 향상
+
+#### 2. 순차 처리 워크플로우
+- **Recipe Lambda**: 레시피 생성 + 상태 업데이트 (10% → 50%)
+- **Price Lambda**: 재료 기반 가격 조회 + 상태 업데이트 (50% → 80%)
+- **Combine Lambda**: 결과 합성 + 완료 상태 (80% → 100%)
+
+#### 3. Claude Opus 4.1 적용
+- **모델**: `anthropic.claude-opus-4-1-20250805-v1:0`
+- **언어**: Python 3.11 구현
+- **기능**: 타겟별 맞춤 프롬프트 (케토, 이유식, 당뇨, 다이어트, 냉장고 털기)
 
 ### 리소스 정리
 

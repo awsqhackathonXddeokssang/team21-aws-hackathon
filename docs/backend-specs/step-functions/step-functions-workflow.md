@@ -1,757 +1,324 @@
-# Step Functions 워크플로우 정의
+# Step Functions 워크플로우 정의 (업데이트됨)
 
 ## 개요
 AI Chef 레시피 생성을 위한 AWS Step Functions 워크플로우 정의
+**Lambda가 DynamoDB 상태 관리를 담당하는 Best Practice 적용**
 
-## 워크플로우 아키텍처 (수정됨)
+## 워크플로우 아키텍처 (최종 수정됨)
 
 ```mermaid
 graph TD
-    A[Start] --> B[Input Validation]
-    B --> C[Update Session Status]
-    C --> D[Generate Recipe]
+    A[Start] --> B[Orchestrate Session]
+    B --> C[Generate Recipe]
+    C --> D[Fetch Prices]
+    D --> E[Combine Results]
+    E --> F[End]
     
-    D --> E[Update Price Phase]
-    E --> F[Fetch Prices with Recipe Ingredients]
+    C --> G[Recipe Lambda manages DynamoDB]
+    D --> H[Price Lambda manages DynamoDB]
+    E --> I[Combine Lambda manages DynamoDB]
     
-    F --> G[Combine Results]
-    G --> H[Save Final Results]
-    H --> I[Update Completion Status]
-    I --> J[End]
+    G --> J[(Sessions Table)]
+    H --> J
+    I --> J
+    I --> K[(Results Table)]
     
-    B --> K[Validation Failed]
-    K --> L[Handle Validation Error]
-    L --> M[End with Error]
-    
-    D --> N[Recipe Generation Failed]
-    N --> O[Recipe Fail End]
-    
-    F --> P[Price Fetching Failed]
-    P --> G[Continue with Fallback]
+    style G fill:#e8f5e8
+    style H fill:#fff3e0
+    style I fill:#fce4ec
+    style J fill:#f1f8e9
+    style K fill:#f1f8e9
 ```
 
-## 핵심 변경사항
+## 핵심 변경사항 (Best Practice 적용)
 
-### 1. 순차 처리로 변경
-- **기존**: Recipe와 Price를 병렬 처리
-- **수정**: Recipe 먼저 생성 → 재료 목록 추출 → Price 조회
+### 1. Lambda가 DynamoDB 직접 관리
+- **기존**: Step Functions에서 DynamoDB 직접 호출
+- **개선**: 각 Lambda가 자신의 상태를 DynamoDB에 직접 업데이트
+- **장점**: 관심사 분리, 에러 처리 개선, 유지보수성 향상
 
-### 2. 진행 상태 세분화
-- 10%: 레시피 생성 시작
-- 50%: 가격 조회 시작  
-- 80%: 결과 결합 시작
-- 100%: 완료
+### 2. 순차 처리 워크플로우
+- **기존**: Recipe와 Price 병렬 처리
+- **개선**: Recipe → Price → Combine 순차 처리
+- **이유**: Price Lambda가 Recipe의 재료 목록 필요
 
-### 3. 에러 핸들링 개선
-- 가격 조회 실패 시 fallback으로 계속 진행
-- 레시피 생성 실패 시 전체 워크플로우 중단
+### 3. 단순화된 Step Functions
+- **기존**: 복잡한 DynamoDB 상태 관리
+- **개선**: Lambda 간 오케스트레이션만 담당
+- **결과**: 워크플로우 가독성 및 유지보수성 향상
 
-## Step Functions 정의 파일
+## Step Functions 정의 파일 (최종 버전)
 
-### 메인 워크플로우 (step-functions-definition.json)
+### 단순화된 워크플로우 (simplified-workflow.json)
 ```json
 {
-  "Comment": "AI Chef Recipe Generation Workflow",
-  "StartAt": "ValidateInput",
+  "Comment": "AI Chef Simplified Workflow - Lambda manages DynamoDB",
+  "StartAt": "OrchestrateSession",
   "States": {
-    "ValidateInput": {
+    "OrchestrateSession": {
       "Type": "Task",
       "Resource": "arn:aws:states:::lambda:invoke",
       "Parameters": {
-        "FunctionName": "${ValidatorLambdaArn}",
+        "FunctionName": "ai-chef-orchestrator-dev",
         "Payload.$": "$"
       },
-      "ResultPath": "$.validation",
-      "Next": "UpdateSessionStatus",
-      "Catch": [
-        {
-          "ErrorEquals": ["States.ALL"],
-          "Next": "HandleValidationError",
-          "ResultPath": "$.error"
-        }
-      ]
+      "ResultPath": "$.sessionResult",
+      "Next": "GenerateRecipe"
     },
-    
-    "UpdateSessionStatus": {
+    "GenerateRecipe": {
       "Type": "Task",
-      "Resource": "arn:aws:states:::dynamodb:putItem",
+      "Resource": "arn:aws:states:::lambda:invoke",
       "Parameters": {
-        "TableName": "${SessionsTableName}",
-        "Item": {
-          "sessionId": {"S.$": "$.sessionId"},
-          "status": {"S": "processing"},
-          "phase": {"S": "recipe_generation"},
-          "progress": {"N": "10"},
-          "updatedAt": {"S.$": "$$.State.EnteredTime"}
-        }
+        "FunctionName": "ai-chef-recipe-dev",
+        "Payload.$": "$"
       },
-      "ResultPath": null,
-      "Next": "ParallelProcessing"
-    },
-    
-    "ParallelProcessing": {
-      "Type": "Parallel",
-      "Branches": [
+      "ResultSelector": {
+        "recipe.$": "$.Payload.body"
+      },
+      "ResultPath": "$.recipeResult",
+      "Retry": [
         {
-          "StartAt": "GenerateRecipe",
-          "States": {
-            "GenerateRecipe": {
-              "Type": "Task",
-              "Resource": "arn:aws:states:::lambda:invoke",
-              "Parameters": {
-                "FunctionName": "${RecipeLambdaArn}",
-                "Payload.$": "$"
-              },
-              "ResultSelector": {
-                "recipe.$": "$.Payload.body"
-              },
-              "Retry": [
-                {
-                  "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException"],
-                  "IntervalSeconds": 2,
-                  "MaxAttempts": 3,
-                  "BackoffRate": 2.0
-                }
-              ],
-              "Catch": [
-                {
-                  "ErrorEquals": ["States.ALL"],
-                  "Next": "RecipeGenerationFailed",
-                  "ResultPath": "$.error"
-                }
-              ],
-              "End": true
-            },
-            
-            "RecipeGenerationFailed": {
-              "Type": "Pass",
-              "Result": {
-                "recipe": {
-                  "error": "Recipe generation failed",
-                  "fallback": true
-                }
-              },
-              "End": true
-            }
-          }
-        },
-        {
-          "StartAt": "FetchPrices",
-          "States": {
-            "FetchPrices": {
-              "Type": "Task",
-              "Resource": "arn:aws:states:::lambda:invoke",
-              "Parameters": {
-                "FunctionName": "${PriceLambdaArn}",
-                "Payload.$": "$"
-              },
-              "ResultSelector": {
-                "pricing.$": "$.Payload.body"
-              },
-              "Retry": [
-                {
-                  "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException"],
-                  "IntervalSeconds": 2,
-                  "MaxAttempts": 3,
-                  "BackoffRate": 2.0
-                }
-              ],
-              "Catch": [
-                {
-                  "ErrorEquals": ["States.ALL"],
-                  "Next": "PriceFetchingFailed",
-                  "ResultPath": "$.error"
-                }
-              ],
-              "End": true
-            },
-            
-            "PriceFetchingFailed": {
-              "Type": "Pass",
-              "Result": {
-                "pricing": {
-                  "error": "Price fetching failed",
-                  "fallback": true
-                }
-              },
-              "End": true
-            }
-          }
+          "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2.0
         }
       ],
-      "ResultPath": "$.parallelResults",
-      "Next": "UpdateProgressStatus"
+      "Next": "FetchPrices"
     },
-    
-    "UpdateProgressStatus": {
+    "FetchPrices": {
       "Type": "Task",
-      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Resource": "arn:aws:states:::lambda:invoke",
       "Parameters": {
-        "TableName": "${SessionsTableName}",
-        "Key": {
-          "sessionId": {"S.$": "$.sessionId"}
-        },
-        "UpdateExpression": "SET #status = :status, #phase = :phase, #progress = :progress, #updatedAt = :updatedAt",
-        "ExpressionAttributeNames": {
-          "#status": "status",
-          "#phase": "phase", 
-          "#progress": "progress",
-          "#updatedAt": "updatedAt"
-        },
-        "ExpressionAttributeValues": {
-          ":status": {"S": "processing"},
-          ":phase": {"S": "combining_results"},
-          ":progress": {"N": "80"},
-          ":updatedAt": {"S.$": "$$.State.EnteredTime"}
+        "FunctionName": "ai-chef-price-dev",
+        "Payload": {
+          "sessionId.$": "$.sessionId",
+          "profile.$": "$.profile",
+          "ingredients.$": "$.recipeResult.recipe.ingredients"
         }
       },
-      "ResultPath": null,
+      "ResultSelector": {
+        "pricing.$": "$.Payload.body"
+      },
+      "ResultPath": "$.pricingResult",
+      "Retry": [
+        {
+          "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2.0
+        }
+      ],
       "Next": "CombineResults"
     },
-    
     "CombineResults": {
       "Type": "Task",
       "Resource": "arn:aws:states:::lambda:invoke",
       "Parameters": {
-        "FunctionName": "${CombineLambdaArn}",
+        "FunctionName": "ai-chef-combine-dev",
         "Payload": {
           "sessionId.$": "$.sessionId",
           "profile.$": "$.profile",
-          "recipeResult.$": "$.parallelResults[0].recipe",
-          "pricingResult.$": "$.parallelResults[1].pricing"
+          "recipeResult.$": "$.recipeResult.recipe",
+          "pricingResult.$": "$.pricingResult.pricing"
         }
       },
-      "ResultSelector": {
-        "combinedResult.$": "$.Payload.body"
-      },
-      "Retry": [
-        {
-          "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException"],
-          "IntervalSeconds": 1,
-          "MaxAttempts": 2,
-          "BackoffRate": 2.0
-        }
-      ],
-      "Next": "SaveFinalResults"
-    },
-    
-    "SaveFinalResults": {
-      "Type": "Task",
-      "Resource": "arn:aws:states:::dynamodb:putItem",
-      "Parameters": {
-        "TableName": "${ResultsTableName}",
-        "Item": {
-          "sessionId": {"S.$": "$.sessionId"},
-          "createdAt": {"S.$": "$$.State.EnteredTime"},
-          "result": {"S.$": "States.JsonToString($.combinedResult)"},
-          "ttl": {"N.$": "States.StringToJson(States.Format('{}', States.MathAdd(States.StringToJson($$.State.EnteredTime), 604800)))"}
-        }
-      },
-      "ResultPath": null,
-      "Next": "UpdateCompletionStatus"
-    },
-    
-    "UpdateCompletionStatus": {
-      "Type": "Task",
-      "Resource": "arn:aws:states:::dynamodb:updateItem",
-      "Parameters": {
-        "TableName": "${SessionsTableName}",
-        "Key": {
-          "sessionId": {"S.$": "$.sessionId"}
-        },
-        "UpdateExpression": "SET #status = :status, #phase = :phase, #progress = :progress, #result = :result, #updatedAt = :updatedAt",
-        "ExpressionAttributeNames": {
-          "#status": "status",
-          "#phase": "phase",
-          "#progress": "progress", 
-          "#result": "result",
-          "#updatedAt": "updatedAt"
-        },
-        "ExpressionAttributeValues": {
-          ":status": {"S": "completed"},
-          ":phase": {"S": "finished"},
-          ":progress": {"N": "100"},
-          ":result": {"S.$": "States.JsonToString($.combinedResult)"},
-          ":updatedAt": {"S.$": "$$.State.EnteredTime"}
-        }
-      },
-      "ResultPath": null,
-      "Next": "SendNotification"
-    },
-    
-    "SendNotification": {
-      "Type": "Task",
-      "Resource": "arn:aws:states:::lambda:invoke",
-      "Parameters": {
-        "FunctionName": "${NotificationLambdaArn}",
-        "Payload": {
-          "sessionId.$": "$.sessionId",
-          "status": "completed",
-          "result.$": "$.combinedResult"
-        }
-      },
-      "ResultPath": null,
       "End": true
-    },
-    
-    "HandleValidationError": {
-      "Type": "Task",
-      "Resource": "arn:aws:states:::dynamodb:updateItem",
-      "Parameters": {
-        "TableName": "${SessionsTableName}",
-        "Key": {
-          "sessionId": {"S.$": "$.sessionId"}
-        },
-        "UpdateExpression": "SET #status = :status, #error = :error, #updatedAt = :updatedAt",
-        "ExpressionAttributeNames": {
-          "#status": "status",
-          "#error": "error",
-          "#updatedAt": "updatedAt"
-        },
-        "ExpressionAttributeValues": {
-          ":status": {"S": "failed"},
-          ":error": {"S.$": "States.JsonToString($.error)"},
-          ":updatedAt": {"S.$": "$$.State.EnteredTime"}
-        }
-      },
-      "Next": "ValidationErrorEnd"
-    },
-    
-    "ValidationErrorEnd": {
-      "Type": "Fail",
-      "Cause": "Input validation failed"
     }
   }
 }
 ```
 
-## CloudFormation 템플릿 (nested-templates/step-functions.yaml)
-```yaml
-AWSTemplateFormatVersion: '2010-09-09'
-Description: 'AI Chef Step Functions Workflow'
+## Lambda별 DynamoDB 상태 관리
 
-Parameters:
-  ProjectName:
-    Type: String
-  Environment:
-    Type: String
-  RecipeLambdaArn:
-    Type: String
-  PriceLambdaArn:
-    Type: String
-  CombineLambdaArn:
-    Type: String
-  SessionsTableName:
-    Type: String
-  ResultsTableName:
-    Type: String
-
-Resources:
-  # Step Functions 실행 역할
-  StepFunctionsExecutionRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub '${ProjectName}-stepfunctions-role-${Environment}'
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: states.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: LambdaInvokePolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - lambda:InvokeFunction
-                Resource:
-                  - !Ref RecipeLambdaArn
-                  - !Ref PriceLambdaArn
-                  - !Ref CombineLambdaArn
-        - PolicyName: DynamoDBAccessPolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - dynamodb:GetItem
-                  - dynamodb:PutItem
-                  - dynamodb:UpdateItem
-                Resource:
-                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${SessionsTableName}'
-                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${ResultsTableName}'
-
-  # Validator Lambda (입력 검증용)
-  ValidatorLambda:
-    Type: AWS::Lambda::Function
-    Properties:
-      FunctionName: !Sub '${ProjectName}-validator-${Environment}'
-      Runtime: python3.11
-      Handler: index.handler
-      Role: !GetAtt ValidatorLambdaRole.Arn
-      Code:
-        ZipFile: |
-          import json
-          
-          def handler(event, context):
-              """입력 검증 Lambda"""
-              try:
-                  # 필수 필드 검증
-                  required_fields = ['sessionId', 'profile']
-                  for field in required_fields:
-                      if field not in event:
-                          raise ValueError(f"Missing required field: {field}")
-                  
-                  # 프로필 검증
-                  profile = event['profile']
-                  if 'target' not in profile:
-                      raise ValueError("Missing target in profile")
-                  
-                  valid_targets = ['keto', 'baby_food', 'diabetes', 'diet', 'fridge']
-                  if profile['target'] not in valid_targets:
-                      raise ValueError(f"Invalid target: {profile['target']}")
-                  
-                  return {
-                      'statusCode': 200,
-                      'body': {
-                          'valid': True,
-                          'message': 'Input validation successful'
-                      }
-                  }
-              except Exception as e:
-                  return {
-                      'statusCode': 400,
-                      'body': {
-                          'valid': False,
-                          'error': str(e)
-                      }
-                  }
-      Timeout: 30
-
-  ValidatorLambdaRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: lambda.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-
-  # Notification Lambda (알림 전송용)
-  NotificationLambda:
-    Type: AWS::Lambda::Function
-    Properties:
-      FunctionName: !Sub '${ProjectName}-notification-${Environment}'
-      Runtime: python3.11
-      Handler: index.handler
-      Role: !GetAtt NotificationLambdaRole.Arn
-      Code:
-        ZipFile: |
-          import json
-          import boto3
-          
-          def handler(event, context):
-              """알림 전송 Lambda (WebSocket 또는 SNS)"""
-              try:
-                  session_id = event['sessionId']
-                  status = event['status']
-                  
-                  # WebSocket API Gateway로 알림 전송 (구현 예정)
-                  # 또는 SNS 토픽으로 알림 전송
-                  
-                  print(f"Notification sent for session {session_id}: {status}")
-                  
-                  return {
-                      'statusCode': 200,
-                      'body': {
-                          'message': 'Notification sent successfully'
-                      }
-                  }
-              except Exception as e:
-                  print(f"Notification error: {e}")
-                  return {
-                      'statusCode': 500,
-                      'body': {
-                          'error': str(e)
-                      }
-                  }
-      Timeout: 30
-
-  NotificationLambdaRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: lambda.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-
-  # Step Functions State Machine
-  RecipeGenerationStateMachine:
-    Type: AWS::StepFunctions::StateMachine
-    Properties:
-      StateMachineName: !Sub '${ProjectName}-workflow-${Environment}'
-      RoleArn: !GetAtt StepFunctionsExecutionRole.Arn
-      DefinitionString: !Sub |
-        {
-          "Comment": "AI Chef Recipe Generation Workflow",
-          "StartAt": "ValidateInput",
-          "States": {
-            "ValidateInput": {
-              "Type": "Task",
-              "Resource": "arn:aws:states:::lambda:invoke",
-              "Parameters": {
-                "FunctionName": "${ValidatorLambda}",
-                "Payload.$": "$"
-              },
-              "ResultPath": "$.validation",
-              "Next": "UpdateSessionStatus",
-              "Catch": [
-                {
-                  "ErrorEquals": ["States.ALL"],
-                  "Next": "HandleValidationError",
-                  "ResultPath": "$.error"
-                }
-              ]
+### 1. Recipe Lambda 상태 관리
+```python
+def update_session_status(session_id: str, status: str, phase: str, progress: int, error: str = None):
+    """Update session status in DynamoDB"""
+    try:
+        sessions_table.update_item(
+            Key={'sessionId': session_id},
+            UpdateExpression="SET #status = :status, #phase = :phase, #progress = :progress, #updatedAt = :updatedAt",
+            ExpressionAttributeNames={
+                '#status': 'status',
+                '#phase': 'phase',
+                '#progress': 'progress',
+                '#updatedAt': 'updatedAt'
             },
-            "UpdateSessionStatus": {
-              "Type": "Task",
-              "Resource": "arn:aws:states:::dynamodb:putItem",
-              "Parameters": {
-                "TableName": "${SessionsTableName}",
-                "Item": {
-                  "sessionId": {"S.$": "$.sessionId"},
-                  "status": {"S": "processing"},
-                  "phase": {"S": "recipe_generation"},
-                  "progress": {"N": "10"},
-                  "updatedAt": {"S.$": "$$.State.EnteredTime"}
-                }
-              },
-              "ResultPath": null,
-              "Next": "ParallelProcessing"
-            },
-            "ParallelProcessing": {
-              "Type": "Parallel",
-              "Branches": [
-                {
-                  "StartAt": "GenerateRecipe",
-                  "States": {
-                    "GenerateRecipe": {
-                      "Type": "Task",
-                      "Resource": "arn:aws:states:::lambda:invoke",
-                      "Parameters": {
-                        "FunctionName": "${RecipeLambdaArn}",
-                        "Payload.$": "$"
-                      },
-                      "ResultSelector": {
-                        "recipe.$": "$.Payload.body"
-                      },
-                      "Retry": [
-                        {
-                          "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException"],
-                          "IntervalSeconds": 2,
-                          "MaxAttempts": 3,
-                          "BackoffRate": 2.0
-                        }
-                      ],
-                      "End": true
-                    }
-                  }
-                },
-                {
-                  "StartAt": "FetchPrices",
-                  "States": {
-                    "FetchPrices": {
-                      "Type": "Task",
-                      "Resource": "arn:aws:states:::lambda:invoke",
-                      "Parameters": {
-                        "FunctionName": "${PriceLambdaArn}",
-                        "Payload.$": "$"
-                      },
-                      "ResultSelector": {
-                        "pricing.$": "$.Payload.body"
-                      },
-                      "Retry": [
-                        {
-                          "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException"],
-                          "IntervalSeconds": 2,
-                          "MaxAttempts": 3,
-                          "BackoffRate": 2.0
-                        }
-                      ],
-                      "End": true
-                    }
-                  }
-                }
-              ],
-              "ResultPath": "$.parallelResults",
-              "Next": "CombineResults"
-            },
-            "CombineResults": {
-              "Type": "Task",
-              "Resource": "arn:aws:states:::lambda:invoke",
-              "Parameters": {
-                "FunctionName": "${CombineLambdaArn}",
-                "Payload": {
-                  "sessionId.$": "$.sessionId",
-                  "profile.$": "$.profile",
-                  "recipeResult.$": "$.parallelResults[0].recipe",
-                  "pricingResult.$": "$.parallelResults[1].pricing"
-                }
-              },
-              "ResultSelector": {
-                "combinedResult.$": "$.Payload.body"
-              },
-              "Next": "SaveFinalResults"
-            },
-            "SaveFinalResults": {
-              "Type": "Task",
-              "Resource": "arn:aws:states:::dynamodb:putItem",
-              "Parameters": {
-                "TableName": "${ResultsTableName}",
-                "Item": {
-                  "sessionId": {"S.$": "$.sessionId"},
-                  "createdAt": {"S.$": "$$.State.EnteredTime"},
-                  "result": {"S.$": "States.JsonToString($.combinedResult)"},
-                  "ttl": {"N": "1735689600"}
-                }
-              },
-              "ResultPath": null,
-              "Next": "UpdateCompletionStatus"
-            },
-            "UpdateCompletionStatus": {
-              "Type": "Task",
-              "Resource": "arn:aws:states:::dynamodb:updateItem",
-              "Parameters": {
-                "TableName": "${SessionsTableName}",
-                "Key": {
-                  "sessionId": {"S.$": "$.sessionId"}
-                },
-                "UpdateExpression": "SET #status = :status, #phase = :phase, #progress = :progress, #result = :result, #updatedAt = :updatedAt",
-                "ExpressionAttributeNames": {
-                  "#status": "status",
-                  "#phase": "phase",
-                  "#progress": "progress",
-                  "#result": "result",
-                  "#updatedAt": "updatedAt"
-                },
-                "ExpressionAttributeValues": {
-                  ":status": {"S": "completed"},
-                  ":phase": {"S": "finished"},
-                  ":progress": {"N": "100"},
-                  ":result": {"S.$": "States.JsonToString($.combinedResult)"},
-                  ":updatedAt": {"S.$": "$$.State.EnteredTime"}
-                }
-              },
-              "ResultPath": null,
-              "Next": "SendNotification"
-            },
-            "SendNotification": {
-              "Type": "Task",
-              "Resource": "arn:aws:states:::lambda:invoke",
-              "Parameters": {
-                "FunctionName": "${NotificationLambda}",
-                "Payload": {
-                  "sessionId.$": "$.sessionId",
-                  "status": "completed",
-                  "result.$": "$.combinedResult"
-                }
-              },
-              "ResultPath": null,
-              "End": true
-            },
-            "HandleValidationError": {
-              "Type": "Fail",
-              "Cause": "Input validation failed"
+            ExpressionAttributeValues={
+                ':status': status,
+                ':phase': phase,
+                ':progress': progress,
+                ':updatedAt': datetime.now().isoformat()
             }
-          }
-        }
+        )
+    except Exception as e:
+        logger.error(f"Failed to update session status: {e}")
 
-Outputs:
-  StateMachineArn:
-    Description: Step Functions State Machine ARN
-    Value: !Ref RecipeGenerationStateMachine
-  
-  StateMachineName:
-    Description: Step Functions State Machine Name
-    Value: !Ref RecipeGenerationStateMachine
+# Recipe Lambda 실행 시
+update_session_status(session_id, 'processing', 'recipe_generation', 10)
+# ... 레시피 생성 로직 ...
+update_session_status(session_id, 'processing', 'recipe_completed', 50)
 ```
 
-## 워크플로우 실행 예시
+### 2. Price Lambda 상태 관리
+```python
+# Price Lambda 실행 시
+update_session_status(session_id, 'processing', 'price_lookup', 60)
+# ... 가격 조회 로직 ...
+update_session_status(session_id, 'processing', 'price_completed', 80)
+```
 
-### 입력 데이터
+### 3. Combine Lambda 상태 관리
+```python
+# Combine Lambda 실행 시
+update_session_status(session_id, 'processing', 'combining_results', 90)
+# ... 결과 결합 로직 ...
+
+# 최종 결과 저장
+save_final_results(session_id, combined_result)
+update_session_status(session_id, 'completed', 'finished', 100)
+```
+
+## 데이터 흐름
+
+### 1. 입력 데이터
 ```json
 {
   "sessionId": "sess_abc123",
   "profile": {
     "target": "keto",
     "healthConditions": ["diabetes"],
-    "allergies": ["nuts"],
+    "allergies": [],
     "cookingLevel": "beginner",
-    "budget": 30000,
-    "preferences": {
-      "cuisine": "korean",
-      "spicyLevel": "mild"
-    }
-  },
-  "constraints": {
-    "maxCalories": 600,
-    "maxCookingTime": 30
+    "budget": 30000
   }
 }
 ```
 
-### 실행 명령어
+### 2. Recipe Lambda → Price Lambda 데이터 전달
+```json
+{
+  "sessionId": "sess_abc123",
+  "profile": {...},
+  "ingredients": [
+    {"name": "아보카도", "amount": "2", "unit": "개"},
+    {"name": "올리브오일", "amount": "3", "unit": "큰술"}
+  ]
+}
+```
+
+### 3. Price Lambda → Combine Lambda 데이터 전달
+```json
+{
+  "sessionId": "sess_abc123",
+  "profile": {...},
+  "recipeResult": {...},
+  "pricingResult": [
+    {"name": "아보카도", "price": 3500, "shop": "네이버쇼핑"},
+    {"name": "올리브오일", "price": 8000, "shop": "네이버쇼핑"}
+  ]
+}
+```
+
+## DynamoDB 테이블 구조
+
+### Sessions Table
+```json
+{
+  "sessionId": "sess_abc123",
+  "status": "completed",
+  "phase": "finished",
+  "progress": 100,
+  "createdAt": "2025-09-05T16:00:00Z",
+  "updatedAt": "2025-09-05T16:02:30Z",
+  "ttl": 1735689600
+}
+```
+
+### Results Table
+```json
+{
+  "sessionId": "sess_abc123",
+  "result": {
+    "recipe": {...},
+    "pricing": [...],
+    "totalCost": 11500,
+    "costPerServing": 5750
+  },
+  "createdAt": "2025-09-05T16:02:30Z",
+  "ttl": 1735689600
+}
+```
+
+## 배포 및 테스트
+
+### 배포 명령어
+```bash
+# Step Functions 업데이트
+cd backend/infrastructure/
+aws stepfunctions update-state-machine \
+  --state-machine-arn arn:aws:states:us-east-1:491085385364:stateMachine:ai-chef-workflow-dev \
+  --definition file://simplified-workflow.json
+
+# Lambda 함수들 배포
+aws cloudformation deploy \
+  --template-file recipe-lambda.yaml \
+  --stack-name ai-chef-recipe-lambda-dev \
+  --capabilities CAPABILITY_IAM
+```
+
+### 테스트 실행
 ```bash
 # Step Functions 실행
 aws stepfunctions start-execution \
-  --state-machine-arn arn:aws:states:us-east-1:123456789012:stateMachine:ai-chef-workflow-dev \
-  --input file://input.json \
+  --state-machine-arn arn:aws:states:us-east-1:491085385364:stateMachine:ai-chef-workflow-dev \
+  --input '{
+    "sessionId": "sess_test_123",
+    "profile": {
+      "target": "keto",
+      "healthConditions": ["diabetes"],
+      "budget": 30000
+    }
+  }' \
   --name execution-$(date +%s)
-
-# 실행 상태 확인
-aws stepfunctions describe-execution \
-  --execution-arn arn:aws:states:us-east-1:123456789012:execution:ai-chef-workflow-dev:execution-1234567890
 ```
 
 ## 모니터링 및 로깅
 
 ### CloudWatch 메트릭
-- 실행 성공/실패 횟수
-- 평균 실행 시간
-- 각 단계별 소요 시간
-- 에러 발생률
+- Lambda 실행 성공/실패 횟수
+- 각 Lambda별 실행 시간
+- DynamoDB 읽기/쓰기 용량
+- Step Functions 실행 상태
 
-### X-Ray 트레이싱
-```yaml
-# Step Functions에서 X-Ray 활성화
-TracingConfiguration:
-  Enabled: true
+### 로그 확인
+```bash
+# Recipe Lambda 로그
+aws logs tail /aws/lambda/ai-chef-recipe-dev --follow
+
+# Price Lambda 로그
+aws logs tail /aws/lambda/ai-chef-price-dev --follow
+
+# Combine Lambda 로그
+aws logs tail /aws/lambda/ai-chef-combine-dev --follow
 ```
 
-### 알람 설정
-```yaml
-# 실행 실패 알람
-ExecutionFailedAlarm:
-  Type: AWS::CloudWatch::Alarm
-  Properties:
-    AlarmName: !Sub '${ProjectName}-stepfunctions-failed-${Environment}'
-    MetricName: ExecutionsFailed
-    Namespace: AWS/States
-    Statistic: Sum
-    Period: 300
-    EvaluationPeriods: 1
-    Threshold: 1
-    ComparisonOperator: GreaterThanOrEqualToThreshold
-```
+## Best Practice 적용 결과
+
+### 장점
+1. **관심사 분리**: 각 Lambda가 자신의 비즈니스 로직과 상태 관리 담당
+2. **단순한 워크플로우**: Step Functions는 오케스트레이션만 담당
+3. **에러 처리 개선**: Lambda 내부에서 세밀한 에러 핸들링
+4. **유지보수성**: 각 Lambda가 독립적으로 개발/배포 가능
+5. **확장성**: 새로운 Lambda 추가 시 워크플로우 변경 최소화
+
+### 성능 개선
+- DynamoDB 호출 최적화 (Lambda 내부에서 배치 처리)
+- 에러 발생 시 즉시 상태 업데이트
+- 재시도 로직 Lambda 내부로 이동
+
+---
+**작성일**: 2025-09-05  
+**작성자**: Team21 AWS Hackathon  
+**최종 업데이트**: Lambda 기반 DynamoDB 관리 Best Practice 적용

@@ -3,24 +3,27 @@ import boto3
 from datetime import datetime
 import logging
 import re
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
 
-# Configure logging
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-# Initialize AWS clients
 bedrock = boto3.client('bedrock-runtime', region_name='us-east-1')
+dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
+
+# DynamoDB tables
+sessions_table = dynamodb.Table('ai-chef-sessions-dev')
 
 def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
-    """
-    Recipe generation Lambda handler with Claude Opus 4.1
-    """
+    """Recipe generation Lambda handler with DynamoDB state management"""
     try:
         session_id = event.get('sessionId')
         profile = event.get('profile', {})
         
         logger.info(f"Processing recipe generation for session: {session_id}")
+        
+        # Update session status to processing
+        update_session_status(session_id, 'processing', 'recipe_generation', 10)
         
         # Generate recipe using Claude Opus 4.1
         recipe = generate_recipe_with_bedrock(profile)
@@ -36,6 +39,9 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
         compliance = validate_target_compliance(recipe, profile.get('target'))
         recipe['targetCompliance'] = compliance
         
+        # Update session status to recipe completed
+        update_session_status(session_id, 'processing', 'recipe_completed', 50)
+        
         return {
             'statusCode': 200,
             'body': {
@@ -47,6 +53,10 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
         
     except Exception as e:
         logger.error(f'Recipe generation error: {str(e)}')
+        
+        # Update session status to failed
+        update_session_status(session_id, 'failed', 'recipe_generation_failed', 0, str(e))
+        
         return {
             'statusCode': 500,
             'body': {
@@ -54,6 +64,38 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
                 'recipe': get_default_recipe(profile.get('target', 'general'))
             }
         }
+
+def update_session_status(session_id: str, status: str, phase: str, progress: int, error: str = None):
+    """Update session status in DynamoDB"""
+    try:
+        update_expression = "SET #status = :status, #phase = :phase, #progress = :progress, #updatedAt = :updatedAt"
+        expression_values = {
+            ':status': status,
+            ':phase': phase,
+            ':progress': progress,
+            ':updatedAt': datetime.now().isoformat()
+        }
+        expression_names = {
+            '#status': 'status',
+            '#phase': 'phase',
+            '#progress': 'progress',
+            '#updatedAt': 'updatedAt'
+        }
+        
+        if error:
+            update_expression += ", #error = :error"
+            expression_values[':error'] = error
+            expression_names['#error'] = 'error'
+        
+        sessions_table.update_item(
+            Key={'sessionId': session_id},
+            UpdateExpression=update_expression,
+            ExpressionAttributeNames=expression_names,
+            ExpressionAttributeValues=expression_values
+        )
+        
+    except Exception as e:
+        logger.error(f"Failed to update session status: {e}")
 
 def generate_recipe_with_bedrock(profile: Dict[str, Any]) -> Dict[str, Any]:
     """Generate recipe using Claude Opus 4.1 with target-specific prompts"""
@@ -86,14 +128,6 @@ def build_target_specific_prompt(profile: Dict[str, Any]) -> str:
     
     if target == 'keto':
         return build_keto_prompt(profile)
-    elif target == 'baby_food':
-        return build_baby_food_prompt(profile)
-    elif target == 'diabetes':
-        return build_diabetes_prompt(profile)
-    elif target == 'diet':
-        return build_diet_prompt(profile)
-    elif target == 'fridge':
-        return build_fridge_clearing_prompt(profile)
     else:
         return build_general_prompt(profile)
 
@@ -280,20 +314,3 @@ def get_default_recipe(target: str) -> Dict[str, Any]:
             'perServing': {'calories': 150, 'protein': 10, 'fat': 5, 'carbs': 12.5, 'fiber': 2.5}
         }
     }
-
-# Additional helper functions for other diet types
-def build_baby_food_prompt(profile: Dict[str, Any]) -> str:
-    """Baby food specific prompt"""
-    return build_general_prompt(profile)  # Simplified for now
-
-def build_diabetes_prompt(profile: Dict[str, Any]) -> str:
-    """Diabetes management specific prompt"""
-    return build_general_prompt(profile)  # Simplified for now
-
-def build_diet_prompt(profile: Dict[str, Any]) -> str:
-    """General diet prompt"""
-    return build_general_prompt(profile)  # Simplified for now
-
-def build_fridge_clearing_prompt(profile: Dict[str, Any]) -> str:
-    """Fridge clearing specific prompt"""
-    return build_general_prompt(profile)  # Simplified for now

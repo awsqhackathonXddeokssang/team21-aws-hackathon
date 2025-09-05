@@ -1,10 +1,10 @@
-# Price Lambda 기능 명세서
+# Price Lambda 기능 명세서 (업데이트됨)
 
 ## 개요
 네이버 쇼핑 API를 활용한 식재료 실시간 가격 조회 Lambda 함수
-**Step Functions → Price Lambda → Naver API → DynamoDB 저장** 플로우 구현
+**Recipe Lambda → Price Lambda → Naver API → DynamoDB 상태 관리** 플로우 구현
 
-## 전체 시퀀스 플로우
+## 전체 시퀀스 플로우 (수정됨)
 
 ```mermaid
 sequenceDiagram
@@ -13,9 +13,11 @@ sequenceDiagram
     participant NA as Naver API
     participant DB as DynamoDB
 
-    Note over SF, DB: 우리가 구현할 Price 플로우
+    Note over SF, DB: Price Lambda가 DynamoDB 상태 관리
     
     SF->>PL: 가격 조회 시작 (ingredients 전달)
+    PL->>DB: 세션 상태 업데이트 (price_lookup, 60%)
+    
     Note over PL: 재료 목록 파싱 및 검증
     
     loop 각 재료별 병렬 처리
@@ -25,11 +27,26 @@ sequenceDiagram
     end
     
     Note over PL: 최적 조합 계산 (같은 업체 우선)
+    PL->>DB: 세션 상태 업데이트 (price_completed, 80%)
     PL-->>SF: PricingResult 형식으로 응답
-    
-    Note over SF: Recipe + Price 결과 합성 후
-    SF->>DB: 최종 결과 DynamoDB 저장
 ```
+
+## 핵심 변경사항
+
+### 1. DynamoDB 상태 관리 추가
+- **기존**: Step Functions에서 상태 관리
+- **개선**: Price Lambda가 직접 DynamoDB 업데이트
+- **상태**: `price_lookup` (60%) → `price_completed` (80%)
+
+### 2. Recipe Lambda 연동
+- **입력**: Recipe Lambda에서 생성된 재료 목록
+- **처리**: 재료별 실시간 가격 조회
+- **출력**: 가격 정보 + 총 비용 계산
+
+### 3. 에러 처리 강화
+- **네이버 API 실패**: 기본 가격으로 fallback
+- **DynamoDB 실패**: 로그 기록 후 계속 진행
+- **재시도 로직**: 네트워크 오류 시 3회 재시도
 
 ## 전문가 에이전트 작업 분배
 
