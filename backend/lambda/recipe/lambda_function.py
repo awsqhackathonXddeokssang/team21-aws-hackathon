@@ -4,6 +4,17 @@ from datetime import datetime
 import logging
 import re
 from typing import Dict, List, Any
+from decimal import Decimal
+
+def convert_floats_to_decimal(obj):
+    """Float를 Decimal로 변환 (DynamoDB 호환)"""
+    if isinstance(obj, float):
+        return Decimal(str(obj))
+    elif isinstance(obj, dict):
+        return {k: convert_floats_to_decimal(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_floats_to_decimal(v) for v in obj]
+    return obj
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -12,7 +23,8 @@ bedrock = boto3.client('bedrock-runtime', region_name='us-east-1')
 dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
 
 # DynamoDB tables
-sessions_table = dynamodb.Table('ai-chef-sessions-dev')
+sessions_table = dynamodb.Table('ai-chef-sessions')
+results_table = dynamodb.Table('ai-chef-results')
 
 def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
     """Recipe generation Lambda handler with DynamoDB state management"""
@@ -42,13 +54,17 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
         # Update session status to recipe completed
         update_session_status(session_id, 'processing', 'recipe_completed', 50)
         
+        # Results 테이블에 레시피 데이터 저장
+        result_data = {
+            'recipe': recipe,
+            'generatedAt': datetime.now().isoformat(),
+            'nutritionInfo': nutrition_info
+        }
+        save_to_results_table(session_id, result_data, profile)
+        
         return {
             'statusCode': 200,
-            'body': {
-                'recipe': recipe,
-                'generatedAt': datetime.now().isoformat(),
-                'nutritionInfo': nutrition_info
-            }
+            'body': result_data
         }
         
     except Exception as e:
@@ -64,6 +80,63 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
                 'recipe': get_default_recipe(profile.get('target', 'general'))
             }
         }
+
+def save_to_results_table(session_id: str, result_data: Dict, profile: Dict):
+    """Results 테이블에 레시피 데이터 저장"""
+    try:
+        result_id = f"{session_id}_recipe"
+        timestamp = datetime.now().isoformat()
+        
+        # Float를 Decimal로 변환
+        converted_data = convert_floats_to_decimal(result_data)
+        
+        # 안전한 데이터 접근
+        recipe = converted_data.get('recipe', {})
+        nutrition_info = converted_data.get('nutritionInfo', {})
+        total_nutrition = nutrition_info.get('total', {}) if isinstance(nutrition_info, dict) else {}
+        
+        # Results 테이블 저장 구조
+        item = {
+            'resultId': result_id,
+            'sessionId': session_id,
+            'type': 'recipe',
+            'status': 'completed',
+            'createdAt': timestamp,
+            'updatedAt': timestamp,
+            'ttl': int(datetime.now().timestamp()) + (7 * 24 * 60 * 60),  # 7일 후 만료
+            
+            # 레시피 데이터
+            'data': converted_data,
+            
+            # 메타데이터
+            'metadata': {
+                'target': profile.get('target', 'general'),
+                'profileData': profile,
+                'generationTime': timestamp,
+                'apiVersion': 'v1.0',
+                'source': 'bedrock-claude'
+            },
+            
+            # 요약 정보 (빠른 조회용)
+            'summary': {
+                'recipeName': recipe.get('recipeName', '레시피') if isinstance(recipe, dict) else '레시피',
+                'servings': recipe.get('servings', 2) if isinstance(recipe, dict) else 2,
+                'cookingTime': recipe.get('cookingTime', '30분') if isinstance(recipe, dict) else '30분',
+                'difficulty': recipe.get('difficulty', '보통') if isinstance(recipe, dict) else '보통',
+                'totalCalories': total_nutrition.get('calories', 0) if isinstance(total_nutrition, dict) else 0,
+                'target': profile.get('target', 'general')
+            }
+        }
+        
+        results_table.put_item(Item=item)
+        logger.info(f"✅ Recipe data saved to results table: {result_id}")
+        
+        return result_id
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to save recipe to results table: {e}")
+        # 저장 실패해도 레시피 생성은 성공으로 처리
+        pass
 
 def update_session_status(session_id: str, status: str, phase: str, progress: int, error: str = None):
     """Update session status in DynamoDB"""

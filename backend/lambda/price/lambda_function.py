@@ -5,22 +5,78 @@ import boto3
 import os
 from datetime import datetime
 from typing import Dict, List, Any
+from decimal import Decimal
+
+def convert_floats_to_decimal(obj):
+    """Float를 Decimal로 변환 (DynamoDB 호환)"""
+    if isinstance(obj, float):
+        return Decimal(str(obj))
+    elif isinstance(obj, dict):
+        return {k: convert_floats_to_decimal(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_floats_to_decimal(v) for v in obj]
+    return obj
 
 # AWS 리소스 초기화
 dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
 sessions_table = dynamodb.Table('ai-chef-sessions')
+results_table = dynamodb.Table('ai-chef-results')
 
 def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
-    """Price Lambda handler - Recipe Lambda 스타일"""
+    """Price Lambda handler - Results 테이블 저장"""
     try:
+        print(f"🔍 Price Lambda 입력 데이터: {json.dumps(event, ensure_ascii=False)}")
+        
         session_id = event.get('sessionId')
-        ingredients = event.get('ingredients', [])
         
-        if not ingredients or not session_id:
-            raise ValueError('ingredients and sessionId required')
+        # Recipe 결과에서 ingredients 추출
+        ingredients = []
         
-        # 세션 상태 업데이트
-        update_session_status(session_id, 'processing', 'price_lookup', 60)
+        # 직접 ingredients가 있는 경우
+        if 'ingredients' in event:
+            ingredients = event['ingredients']
+            print(f"✅ 직접 ingredients 발견: {ingredients}")
+        
+        # recipeResult에서 추출하는 경우
+        elif 'recipeResult' in event:
+            print("🔍 recipeResult에서 추출 시도")
+            recipe_result = event['recipeResult']
+            if 'recipe' in recipe_result:
+                recipe_data = recipe_result['recipe']
+                print(f"🔍 recipe_data 타입: {type(recipe_data)}")
+                
+                # JSON 문자열인 경우 파싱
+                if isinstance(recipe_data, str):
+                    print("🔍 JSON 문자열 파싱 시도")
+                    recipe_obj = json.loads(recipe_data)
+                    print(f"🔍 파싱된 객체: {recipe_obj}")
+                    ingredients = recipe_obj.get('recipe', {}).get('ingredients', [])
+                    print(f"✅ 추출된 ingredients: {ingredients}")
+                else:
+                    ingredients = recipe_data.get('ingredients', [])
+        
+        # body.recipe에서 추출하는 경우
+        elif 'body' in event and 'recipe' in event['body']:
+            print("🔍 body.recipe에서 추출 시도")
+            recipe = event['body']['recipe']
+            ingredients = recipe.get('ingredients', [])
+        
+        # ingredients가 객체 배열인 경우 name만 추출
+        if ingredients and isinstance(ingredients[0], dict):
+            print("🔍 객체 배열에서 name 추출")
+            ingredients = [ing.get('name', str(ing)) for ing in ingredients]
+        
+        print(f"🎯 최종 ingredients: {ingredients}")
+        print(f"🎯 sessionId: {session_id}")
+        
+        if not session_id or not ingredients:
+            return {
+                'statusCode': 400,
+                'body': {'error': 'ingredients and sessionId required', 'success': False}
+            }
+        
+        # 세션 상태 업데이트 (진행률 50%)
+        update_session_status(session_id, 'price_processing', 50)
         
         # 재료별 가격 조회
         price_results = {}
@@ -31,38 +87,80 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
         # 응답 데이터 구성
         result = format_pricing_result(price_results, session_id)
         
-        # DynamoDB 저장
-        save_price_data(session_id, result)
+        # Results 테이블에 저장
+        save_to_results_table(session_id, result, ingredients)
         
-        # 세션 상태 완료
-        update_session_status(session_id, 'processing', 'price_completed', 80)
+        # 세션 상태 완료 (진행률 80%)
+        update_session_status(session_id, 'price_completed', 80)
         
         return {
             'statusCode': 200,
-            'headers': {
-                'Content-Type': 'application/json; charset=utf-8'
-            },
+            'headers': {'Content-Type': 'application/json; charset=utf-8'},
             'body': result
         }
         
     except Exception as e:
-        update_session_status(session_id, 'failed', 'price_lookup_failed', 60, str(e))
+        print(f'Price Lambda error: {e}')
+        update_session_status(session_id, 'price_failed', 50, str(e))
         return {
             'statusCode': 500,
-            'body': {
-                'error': str(e),
-                'success': False
+            'body': {'error': str(e), 'success': False}
+        }
+
+def save_to_results_table(session_id: str, result_data: Dict, ingredients: List):
+    """Results 테이블에 가격 데이터 저장"""
+    try:
+        result_id = f"{session_id}_price"
+        timestamp = datetime.now().isoformat()
+        
+        # Float를 Decimal로 변환
+        converted_data = convert_floats_to_decimal(result_data['data'])
+        
+        # Results 테이블 저장 구조
+        item = {
+            'resultId': result_id,
+            'sessionId': session_id,
+            'type': 'price',
+            'status': 'completed',
+            'createdAt': timestamp,
+            'updatedAt': timestamp,
+            'ttl': int(datetime.now().timestamp()) + (7 * 24 * 60 * 60),  # 7일 후 만료
+            
+            # 가격 데이터
+            'data': converted_data,
+            
+            # 메타데이터
+            'metadata': {
+                'ingredientCount': len(ingredients),
+                'requestedIngredients': ingredients,
+                'processingTime': result_data.get('metadata', {}).get('timestamp', timestamp),
+                'apiVersion': 'v1.0',
+                'source': 'naver-shopping-api'
+            },
+            
+            # 요약 정보 (빠른 조회용)
+            'summary': {
+                'totalIngredients': converted_data['summary']['totalIngredients'],
+                'foundIngredients': converted_data['summary']['foundIngredients'], 
+                'successRate': converted_data['summary']['successRate'],
+                'totalEstimatedCost': converted_data['recommendations']['totalEstimatedCost'],
+                'cheapestVendor': converted_data['recommendations']['optimalVendors'][0]['vendor'] if converted_data['recommendations']['optimalVendors'] else None
             }
         }
+        
+        results_table.put_item(Item=item)
+        print(f"✅ Price data saved to results table: {result_id}")
+        
+        return result_id
+        
+    except Exception as e:
+        print(f"❌ Failed to save to results table: {e}")
+        raise e
 
 def get_naver_credentials():
     """AWS Secrets Manager에서 네이버 API 키 가져오기"""
-    import boto3
-    import json
-    
     secret_name = os.environ.get('NAVER_API_SECRET_NAME')
     if not secret_name:
-        # Fallback to environment variables
         return {
             'client_id': os.environ.get('NAVER_CLIENT_ID', '5A_tDnltTaEiCEsXbHH7'),
             'client_secret': os.environ.get('NAVER_CLIENT_SECRET', 'ygjYjr9oqc')
@@ -78,19 +176,18 @@ def get_naver_credentials():
         }
     except Exception as e:
         print(f"Failed to get secrets: {e}")
-        # Fallback to environment variables
         return {
             'client_id': os.environ.get('NAVER_CLIENT_ID', '5A_tDnltTaEiCEsXbHH7'),
             'client_secret': os.environ.get('NAVER_CLIENT_SECRET', 'ygjYjr9oqc')
         }
 
 def get_ingredient_prices(ingredient_name: str) -> List[Dict]:
-    """네이버 쇼핑 API로 가격 조회 - Secrets Manager 사용"""
+    """네이버 쇼핑 API로 가격 조회"""
     credentials = get_naver_credentials()
     client_id = credentials['client_id']
     client_secret = credentials['client_secret']
     
-    # 한글 인코딩 수정
+    # 간단한 기본 검색
     query = urllib.parse.quote(ingredient_name)
     url = f"https://openapi.naver.com/v1/search/shop.json?query={query}&display=20&sort=asc"
     
@@ -99,17 +196,15 @@ def get_ingredient_prices(ingredient_name: str) -> List[Dict]:
     request.add_header("X-Naver-Client-Secret", client_secret)
     
     try:
-        with urllib.request.urlopen(request, timeout=5) as response:
-            # UTF-8 디코딩 명시
-            data = json.loads(response.read().decode('utf-8'))
+        response = urllib.request.urlopen(request)
+        data = json.loads(response.read().decode('utf-8'))
         
         prices = []
         for item in data.get('items', []):
-            # 한글 제목 정리
             title = item.get('title', '').replace('<b>', '').replace('</b>', '')
             price = int(item.get('lprice', 0))
             
-            # 0원 상품만 필터링
+            # 0원만 필터링
             if price <= 0:
                 continue
             
@@ -165,75 +260,52 @@ def calculate_optimal_vendors(price_results: Dict[str, List]) -> List[Dict]:
     for ingredient, items in price_results.items():
         if not items:
             continue
-            
+        
         cheapest = items[0]
         vendor = cheapest['vendor']
         
         if vendor not in vendor_groups:
-            vendor_groups[vendor] = {'items': [], 'totalPrice': 0, 'itemCount': 0}
+            vendor_groups[vendor] = {
+                'vendor': vendor,
+                'items': [],
+                'totalPrice': 0,
+                'itemCount': 0
+            }
         
-        vendor_groups[vendor]['items'].append({'ingredient': ingredient, **cheapest})
+        vendor_groups[vendor]['items'].append({
+            'ingredient': ingredient,
+            **cheapest
+        })
         vendor_groups[vendor]['totalPrice'] += cheapest['price']
         vendor_groups[vendor]['itemCount'] += 1
     
-    return [{'vendor': vendor, **data} for vendor, data in vendor_groups.items()]
+    return sorted(vendor_groups.values(), key=lambda x: x['totalPrice'])
 
-def update_session_status(session_id: str, status: str, phase: str, progress: int, error: str = None):
-    """세션 상태 업데이트 - Recipe Lambda 스타일"""
+def update_session_status(session_id: str, phase: str, progress: int, error_message: str = None):
+    """세션 상태 업데이트"""
     try:
-        update_expression = "SET #status = :status, #phase = :phase, #progress = :progress, #updatedAt = :updatedAt"
+        update_expression = "SET #phase = :phase, #progress = :progress, #updatedAt = :updatedAt"
         expression_values = {
-            ':status': status,
             ':phase': phase,
             ':progress': progress,
             ':updatedAt': datetime.now().isoformat()
         }
-        expression_names = {
-            '#status': 'status',
-            '#phase': 'phase',
-            '#progress': 'progress',
-            '#updatedAt': 'updatedAt'
-        }
         
-        if error:
-            update_expression += ", #error = :error"
-            expression_values[':error'] = error[:1000]
-            expression_names['#error'] = 'error'
+        if error_message:
+            update_expression += ", #errorMessage = :errorMessage"
+            expression_values[':errorMessage'] = error_message
         
         sessions_table.update_item(
             Key={'sessionId': session_id},
             UpdateExpression=update_expression,
-            ExpressionAttributeNames=expression_names,
+            ExpressionAttributeNames={
+                '#phase': 'phase',
+                '#progress': 'progress',
+                '#updatedAt': 'updatedAt',
+                '#errorMessage': 'errorMessage'
+            },
             ExpressionAttributeValues=expression_values
         )
         
     except Exception as e:
         print(f"Failed to update session status: {e}")
-
-def save_price_data(session_id: str, result_data: Dict):
-    """가격 데이터 저장 - Recipe Lambda 스타일"""
-    try:
-        # 데이터 크기 제한
-        data_str = json.dumps(result_data['data'])
-        if len(data_str) > 350000:  # 350KB 제한
-            # 재료당 5개만 저장
-            truncated_ingredients = {
-                k: v[:5] for k, v in result_data['data']['ingredients'].items()
-            }
-            result_data['data']['ingredients'] = truncated_ingredients
-        
-        sessions_table.update_item(
-            Key={'sessionId': session_id},
-            UpdateExpression="SET #priceData = :priceData, #priceUpdatedAt = :updatedAt",
-            ExpressionAttributeNames={
-                '#priceData': 'priceData',
-                '#priceUpdatedAt': 'priceUpdatedAt'
-            },
-            ExpressionAttributeValues={
-                ':priceData': result_data['data'],
-                ':updatedAt': datetime.now().isoformat()
-            }
-        )
-        
-    except Exception as e:
-        print(f"Failed to save price data: {e}")

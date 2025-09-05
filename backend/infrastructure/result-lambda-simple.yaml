@@ -117,10 +117,10 @@ Resources:
       TableName: 'ai-chef-results'
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
-        - AttributeName: sessionId
+        - AttributeName: resultId
           AttributeType: S
       KeySchema:
-        - AttributeName: sessionId
+        - AttributeName: resultId
           KeyType: HASH
       TimeToLiveSpecification:
         AttributeName: ttl
