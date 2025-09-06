@@ -1,7 +1,7 @@
 const { BedrockRuntimeClient, InvokeModelCommand } = require('@aws-sdk/client-bedrock-runtime');
 const { Client } = require('@opensearch-project/opensearch');
 const { AwsSigv4Signer } = require('@opensearch-project/opensearch/aws');
-const { DynamoDBClient, PutItemCommand, UpdateItemCommand, QueryCommand } = require('@aws-sdk/client-dynamodb');
+const { DynamoDBClient, PutItemCommand, UpdateItemCommand, QueryCommand, ScanCommand } = require('@aws-sdk/client-dynamodb');
 
 const bedrock = new BedrockRuntimeClient({ region: 'us-east-1' });
 const dynamoClient = new DynamoDBClient({ region: 'us-east-1' });
@@ -170,12 +170,10 @@ async function calculateNutritionWithAI(recipe, profile) {
 
 async function updateRecipeNutrition(sessionId, nutrition) {
     try {
-        // sessionId로 기존 recipe 레코드 찾기
-        const queryParams = {
+        // sessionId로 기존 recipe 레코드 찾기 (스캔 사용)
+        const scanParams = {
             TableName: 'ai-chef-results',
-            IndexName: 'sessionId-index',
-            KeyConditionExpression: 'sessionId = :sessionId',
-            FilterExpression: '#type = :type',
+            FilterExpression: 'sessionId = :sessionId AND #type = :type',
             ExpressionAttributeNames: {
                 '#type': 'type'
             },
@@ -185,7 +183,7 @@ async function updateRecipeNutrition(sessionId, nutrition) {
             }
         };
 
-        const result = await dynamoClient.send(new QueryCommand(queryParams));
+        const result = await dynamoClient.send(new ScanCommand(scanParams));
         
         if (result.Items && result.Items.length > 0) {
             const recipeItem = result.Items[0];
