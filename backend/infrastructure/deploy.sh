@@ -40,9 +40,18 @@ aws cloudformation deploy \
   --capabilities CAPABILITY_IAM \
   --region ${REGION}
 
+# Deploy Result Lambda
+echo "📊 Deploying Result Lambda..."
+aws cloudformation deploy \
+  --template-file result-lambda.yaml \
+  --stack-name ai-chef-result-lambda \
+  --capabilities CAPABILITY_IAM \
+  --region ${REGION}
+
 echo "✅ All Lambda functions deployed successfully!"
 echo "📊 Functions deployed:"
 echo "  - ai-chef-recipe"
 echo "  - PriceLambda"
 echo "  - CombineLambda"
 echo "  - recipe-image-generator"
+echo "  - ai-chef-result"
