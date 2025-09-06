@@ -5,7 +5,7 @@ Description: AI Chef Complete Backend - All Functions and API Gateway
 
 Globals:
   Function:
-    Runtime: python3.11
+    Runtime: nodejs18.x
     Timeout: 30
     MemorySize: 256
     Environment:
