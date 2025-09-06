@@ -33,6 +33,8 @@ export default function ChatScreen() {
   const [sessionStatus, setSessionStatus] = useState<SessionStatus | null>(null);
   const [nutritionData, setNutritionData] = useState<any>(null);
   const [priceData, setPriceData] = useState<any>(null);
+  const [recommendationsData, setRecommendationsData] = useState<any>(null);
+  const [imageData, setImageData] = useState<any>(null);
 
   // 자동 스크롤을 위한 ref
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -66,10 +68,45 @@ export default function ChatScreen() {
 
     statusPollingInterval.current = setInterval(async () => {
       try {
+        const currentSessionId = sessionId || localStorage.getItem('sessionId') || '';
+        if (!currentSessionId) {
+          console.error('No sessionId available for polling');
+          return;
+        }
+        
         // 상태 체크
-        const statusResponse = await fetch(`${API_CONFIG.BASE_URL}/sessions/${sessionId}/status`);
+        const statusResponse = await fetch(`${API_CONFIG.BASE_URL}/sessions/${currentSessionId}/status`);
         const statusData = await statusResponse.json();
         setSessionStatus(statusData);
+        
+        // 레시피 데이터가 아직 없으면 계속 가져오기 시도
+        if (!currentRecipe || !currentRecipe.name) {
+          const resultResponse = await fetch(`${API_CONFIG.BASE_URL}/sessions/${currentSessionId}/result`);
+          const resultData = await resultResponse.json();
+          
+          if (resultData.result?.recipe) {
+            console.log('✅ Recipe data now available!');
+            const recipe = {
+              id: resultData.sessionId || `recipe-${Date.now()}`,
+              name: resultData.result.recipe.recipeName || resultData.result.recipe.name,
+              description: resultData.result.recipe.description,
+              cookingTime: 30,
+              difficulty: 'medium' as const,
+              servings: 2,
+              ingredients: resultData.result.recipe.ingredients.map((ing: string | any) => {
+                if (typeof ing === 'string') {
+                  return { name: ing, amount: '' };
+                }
+                return ing;
+              }),
+              instructions: resultData.result.recipe.instructions,
+              nutrition: resultData.result.recipe.nutrition,
+              tags: resultData.result.recipe.tags || [],
+              totalPrice: resultData.result.price?.recommendations?.totalEstimatedCost
+            };
+            setCurrentRecipe(recipe);
+          }
+        }
         
         // 영양정보 완료 체크
         if (statusData.nutritionStatus === 'completed' && !nutritionData) {
@@ -86,17 +123,19 @@ export default function ChatScreen() {
           const resultData = await resultResponse.json();
           if (resultData.result?.price) {
             setPriceData(resultData.result.price);
-            // 가격 데이터로 ingredients 업데이트
-            if (currentRecipe && resultData.result.price?.ingredients) {
-              setCurrentRecipe(prev => ({
-                ...prev!,
-                ingredients: Object.entries(resultData.result.price.ingredients).map(([name, prices]: [string, any]) => ({
-                  name,
-                  amount: '',
-                  prices: prices.slice(0, 3) // 상위 3개만
-                }))
-              }));
+            // recommendations 데이터 저장
+            if (resultData.result.price?.recommendations) {
+              setRecommendationsData(resultData.result.price.recommendations);
             }
+          }
+        }
+
+        // 이미지 정보 완료 체크
+        if (statusData.imageStatus === 'completed' && !imageData) {
+          const resultResponse = await fetch(`${API_CONFIG.BASE_URL}/sessions/${sessionId}/result`);
+          const resultData = await resultResponse.json();
+          if (resultData.result?.image) {
+            setImageData(resultData.result.image);
           }
         }
         
@@ -150,34 +189,45 @@ export default function ChatScreen() {
           // 실제 결과 조회 API
           const resultResponse = await fetch(`${API_CONFIG.BASE_URL}/sessions/${sessionId}/result`);
           const recipeResult = await resultResponse.json();
+          console.log('📦 Result API response:', recipeResult);
           
           // 결과 캐싱
           localStorage.setItem(`recipe_${sessionId}`, JSON.stringify(recipeResult));
           
-          // API 응답 데이터 매핑
-          const recipe = {
-            id: recipeResult.sessionId || `recipe-${Date.now()}`,
-            name: recipeResult.result.recipe.recipeName || recipeResult.result.recipe.name,
-            description: recipeResult.result.recipe.description,
-            cookingTime: 30,  // API에 없으므로 기본값
-            difficulty: 'medium' as const,  // API에 없으므로 기본값
-            servings: 2,  // API에 없으므로 기본값
-            ingredients: recipeResult.result.recipe.ingredients.map((ing: string | any) => {
-              if (typeof ing === 'string') {
-                return { name: ing, amount: '' };
-              }
-              return ing;
-            }),
-            instructions: recipeResult.result.recipe.instructions,
-            nutrition: recipeResult.result.recipe.nutrition,
-            tags: recipeResult.result.recipe.tags || [],
-            totalPrice: recipeResult.result.price?.recommendations?.totalEstimatedCost
-          };
-          setCurrentRecipe(recipe);
-          setIsLoading(false);
-          setShowResult(true);  // 결과 화면 표시
+          // result 필드가 있는지 체크
+          if (recipeResult.result?.recipe) {
+            console.log('✅ Recipe data found in result');
+            // API 응답 데이터 매핑
+            const recipe = {
+              id: recipeResult.sessionId || `recipe-${Date.now()}`,
+              name: recipeResult.result.recipe.recipeName || recipeResult.result.recipe.name,
+              description: recipeResult.result.recipe.description,
+              cookingTime: 30,  // API에 없으므로 기본값
+              difficulty: 'medium' as const,  // API에 없으므로 기본값
+              servings: 2,  // API에 없으므로 기본값
+              ingredients: recipeResult.result.recipe.ingredients.map((ing: string | any) => {
+                if (typeof ing === 'string') {
+                  return { name: ing, amount: '' };
+                }
+                return ing;
+              }),
+              instructions: recipeResult.result.recipe.instructions,
+              nutrition: recipeResult.result.recipe.nutrition,
+              tags: recipeResult.result.recipe.tags || [],
+              totalPrice: recipeResult.result.price?.recommendations?.totalEstimatedCost
+            };
+            setCurrentRecipe(recipe);
+          } else {
+            console.log('⚠️ Recipe data not yet available, will continue polling');
+            // 레시피 데이터가 없어도 결과 화면으로 전환
+            setCurrentRecipe(null);
+          }
           
-          // 영양/가격 정보 추가 폴링 시작
+          // 무조건 결과 화면으로 전환
+          setIsLoading(false);
+          setShowResult(true);
+          
+          // 계속 폴링하여 데이터 업데이트
           startStatusPolling();
           
         } else if (status === 'failed') {
@@ -519,19 +569,12 @@ export default function ChatScreen() {
   };
 
   const calculateTotal = () => {
-    if (!currentRecipe?.ingredients) return 0;
+    if (!recommendationsData?.optimalVendors) return 0;
     
-    return currentRecipe.ingredients
-      .filter(ingredient => checkedItems[ingredient.name])
-      .reduce((total, ingredient) => {
-        if (ingredient.prices && ingredient.prices.length > 0) {
-          const minPrice = Math.min(...ingredient.prices.map(p => p.price));
-          return total + minPrice;
-        } else if (ingredient.price) {
-          return total + ingredient.price;
-        }
-        return total;
-      }, 0);
+    return recommendationsData.optimalVendors
+      .flatMap((vendor: any) => vendor.items)
+      .filter((item: any) => checkedItems[item.ingredient])
+      .reduce((total: number, item: any) => total + (item.price || 0), 0);
   };
 
   const formatPrice = (price: number) => {
@@ -783,10 +826,12 @@ export default function ChatScreen() {
       )}
 
       {/* 레시피 결과 화면 */}
-      {showResult && !isLoading && currentRecipe && (
+      {showResult && !isLoading && (
         <div className="flex-1 p-4 overflow-y-auto">
           <div className="max-w-2xl mx-auto">
-            <h2 className="text-2xl font-bold text-gray-800 mb-4 text-center">{currentRecipe.name}</h2>
+            <h2 className="text-2xl font-bold text-gray-800 mb-4 text-center">
+              {currentRecipe?.name || '레시피 준비 중...'}
+            </h2>
             
             {/* 탭 버튼들 */}
             <div className="flex border-b border-gray-200 mb-6">
@@ -832,10 +877,22 @@ export default function ChatScreen() {
             <div className="bg-white rounded-lg shadow-lg p-6">
               {activeTab === 'recipe' && (
                 <div>
-                  {/* 요리 이미지 플레이스홀더 */}
-                  <div className="w-full h-48 bg-gradient-to-br from-orange-100 to-orange-200 rounded-lg flex items-center justify-center mb-6">
-                    <span className="text-orange-600 font-medium">요리 이미지</span>
-                  </div>
+                  {currentRecipe ? (
+                    <>
+                      {/* 요리 이미지 */}
+                      {imageData?.imageUrl ? (
+                        <div className="w-full h-48 mb-6 overflow-hidden rounded-lg">
+                          <img 
+                            src={imageData.imageUrl} 
+                            alt={currentRecipe.name}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      ) : (
+                        <div className="w-full h-48 bg-gradient-to-br from-orange-100 to-orange-200 rounded-lg flex items-center justify-center mb-6">
+                          <span className="text-orange-600 font-medium">이미지 생성 중...</span>
+                        </div>
+                      )}
 
                   {/* 레시피 설명 */}
                   <p className="text-gray-600 mb-6">{currentRecipe.description}</p>
@@ -933,72 +990,97 @@ export default function ChatScreen() {
                       </div>
                     </div>
                   )}
+                    </>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center py-12">
+                      <Loader2 className="w-8 h-8 animate-spin text-orange-500 mb-4" />
+                      <p className="text-gray-600">레시피를 불러오고 있어요...</p>
+                      <p className="text-sm text-gray-500 mt-2">잠시만 기다려주세요!</p>
+                    </div>
+                  )}
                 </div>
               )}
 
               {activeTab === 'shopping' && (
                 <div>
                   {sessionStatus?.priceStatus === 'completed' ? (
-                    currentRecipe?.ingredients ? (
+                    recommendationsData?.optimalVendors ? (
                     <div className="space-y-4">
-                      <h4 className="font-semibold text-gray-800 mb-4">필요한 재료</h4>
+                      <div className="mb-4">
+                        <h4 className="font-semibold text-gray-800">최저가 장보기 리스트</h4>
+                        <p className="text-sm text-gray-600 mt-1">
+                          예상 총액: <span className="font-bold text-orange-600">
+                            {recommendationsData.totalEstimatedCost?.toLocaleString()}원
+                          </span>
+                        </p>
+                      </div>
                       
-                      {currentRecipe.ingredients.map((ingredient, index) => {
-                        const minPrice = ingredient.prices && ingredient.prices.length > 0 
-                          ? Math.min(...ingredient.prices.map(p => p.price))
-                          : ingredient.price || 0;
-                        const isChecked = checkedItems[ingredient.name] || false;
-                        
-                        return (
-                          <div key={index} className="border border-gray-200 rounded-lg p-4">
-                            <div className="flex items-start mb-3">
-                              <input
-                                type="checkbox"
-                                checked={isChecked}
-                                onChange={() => handleCheckItem(ingredient.name)}
-                                className="mt-1 mr-3 w-4 h-4 text-orange-600 rounded focus:ring-orange-500"
-                              />
-                              <div className="flex-1">
-                                <h5 className="font-medium text-gray-800">{ingredient.name}</h5>
-                                <p className="text-sm text-gray-600">{ingredient.amount}</p>
-                              </div>
-                            </div>
+                      {recommendationsData.optimalVendors.map((vendor: any, vendorIndex: number) => (
+                        <div key={vendorIndex} className="border border-gray-200 rounded-lg p-4">
+                          <div className="flex justify-between items-center mb-3">
+                            <h5 className="font-medium text-gray-800">
+                              {vendor.vendor} ({vendor.itemCount}개 상품)
+                            </h5>
+                            <span className="font-bold text-orange-600">
+                              {vendor.totalPrice?.toLocaleString()}원
+                            </span>
+                          </div>
+                          
+                          {vendor.items.map((item: any, itemIndex: number) => {
+                            const isChecked = checkedItems[item.ingredient] || false;
                             
-                            <div className="ml-7 space-y-2">
-                              {ingredient.prices && ingredient.prices.length > 0 ? (
-                                ingredient.prices.map((priceInfo, priceIndex) => (
-                                  <div key={priceIndex} className="flex justify-between items-center">
-                                    <span className="text-sm text-gray-600">{priceInfo.vendor}</span>
-                                    <div className="flex items-center">
-                                      <span className={`font-medium ${
-                                        priceInfo.price === minPrice 
-                                          ? 'text-orange-600' 
-                                          : 'text-gray-500'
-                                      }`}>
-                                        {formatPrice(priceInfo.price)}
-                                      </span>
-                                      {priceInfo.price === minPrice && (
-                                        <span className="ml-2 text-xs bg-orange-100 text-orange-600 px-2 py-1 rounded-full">
-                                          👑 최저가
-                                        </span>
+                            return (
+                              <div key={itemIndex} className="flex items-start py-3 border-t border-gray-100">
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={() => handleCheckItem(item.ingredient)}
+                                  className="mt-1 mr-3 w-4 h-4 text-orange-600 rounded focus:ring-orange-500"
+                                />
+                                
+                                {item.image && (
+                                  <img 
+                                    src={item.image} 
+                                    alt={item.name}
+                                    className="w-16 h-16 object-cover rounded mr-3"
+                                  />
+                                )}
+                                
+                                <div className="flex-1">
+                                  <div className="flex items-start justify-between">
+                                    <div>
+                                      <p className="font-medium text-gray-800">
+                                        {item.ingredient}
+                                      </p>
+                                      <p className="text-sm text-gray-600 mt-1">
+                                        {item.name}
+                                      </p>
+                                      <p className="text-xs text-gray-500 mt-1">
+                                        {item.category} {item.brand && `· ${item.brand}`}
+                                      </p>
+                                    </div>
+                                    <div className="text-right">
+                                      <p className="font-bold text-orange-600">
+                                        {item.price?.toLocaleString()}원
+                                      </p>
+                                      {item.link && (
+                                        <a 
+                                          href={item.link} 
+                                          target="_blank" 
+                                          rel="noopener noreferrer"
+                                          className="text-xs text-blue-600 hover:underline mt-1 inline-block"
+                                        >
+                                          바로가기 →
+                                        </a>
                                       )}
                                     </div>
                                   </div>
-                                ))
-                              ) : ingredient.price ? (
-                                <div className="flex justify-between items-center">
-                                  <span className="text-sm text-gray-600">{ingredient.store || '온라인'}</span>
-                                  <span className="text-sm font-medium text-orange-600">
-                                    {formatPrice(ingredient.price)}
-                                  </span>
                                 </div>
-                              ) : (
-                                <div className="text-sm text-gray-500">가격 정보 없음</div>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ))}
                     </div>
                     ) : (
                       <div className="text-center py-8">
@@ -1018,7 +1100,9 @@ export default function ChatScreen() {
                     <div className="max-w-2xl mx-auto flex justify-between items-center">
                       <div>
                         <p className="text-sm text-gray-600">
-                          선택한 재료 ({Object.values(checkedItems).filter(Boolean).length}/{currentRecipe?.ingredients?.length || 0}개)
+                          선택한 재료 ({Object.values(checkedItems).filter(Boolean).length}/{
+                            recommendationsData?.optimalVendors?.reduce((sum: number, v: any) => sum + v.items.length, 0) || 0
+                          }개)
                         </p>
                       </div>
                       <div className="text-right">

@@ -42,11 +42,7 @@ aws cloudformation deploy \
 
 # Deploy Result Lambda
 echo "📊 Deploying Result Lambda..."
-aws cloudformation deploy \
-  --template-file result-api.yaml \
-  --stack-name ai-chef-result-lambda \
-  --capabilities CAPABILITY_IAM \
-  --region ${REGION}
+echo "⚠️  Skipping Result Lambda deployment (function already exists and updated manually)"
 
 echo "✅ All Lambda functions deployed successfully!"
 echo "📊 Functions deployed:"
