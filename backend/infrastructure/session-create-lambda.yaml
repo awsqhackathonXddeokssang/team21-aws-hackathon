@@ -1,0 +1,112 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'AI Chef Session Create Lambda Function'
+
+Resources:
+  SessionCreateLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                Resource: 'arn:aws:dynamodb:*:*:table/ai-chef-sessions'
+
+  SessionCreateLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: 'ai-chef-session-create'
+      Runtime: nodejs18.x
+      Handler: index.handler
+      Role: !GetAtt SessionCreateLambdaRole.Arn
+      Timeout: 30
+      MemorySize: 256
+      Environment:
+        Variables:
+          SESSIONS_TABLE_NAME: 'ai-chef-sessions'
+      Code:
+        ZipFile: |
+          const AWS = require('aws-sdk');
+          const { v4: uuidv4 } = require('uuid');
+
+          const dynamodb = new AWS.DynamoDB.DocumentClient();
+          const TABLE_NAME = process.env.SESSIONS_TABLE_NAME;
+
+          exports.handler = async (event) => {
+            console.log('세션 생성 요청:', JSON.stringify(event, null, 2));
+
+            if (event.httpMethod === 'OPTIONS') {
+              return {
+                statusCode: 200,
+                headers: {
+                  'Access-Control-Allow-Origin': '*',
+                  'Access-Control-Allow-Headers': 'Content-Type',
+                  'Access-Control-Allow-Methods': 'POST, OPTIONS'
+                },
+                body: ''
+              };
+            }
+
+            try {
+              const sessionId = `sess_${uuidv4()}`;
+              const now = new Date();
+              const expiresAt = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+              
+              const sessionRecord = {
+                sessionId,
+                status: 'idle',
+                createdAt: now.toISOString(),
+                expiresAt: expiresAt.toISOString(),
+                lastActivity: now.toISOString(),
+                ttl: Math.floor(expiresAt.getTime() / 1000),
+                retryCount: 0,
+                maxRetries: 3
+              };
+
+              await dynamodb.put({
+                TableName: TABLE_NAME,
+                Item: sessionRecord
+              }).promise();
+
+              console.log('세션 생성 완료:', sessionId);
+
+              return {
+                statusCode: 200,
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Access-Control-Allow-Origin': '*'
+                },
+                body: JSON.stringify({
+                  sessionId: sessionRecord.sessionId,
+                  createdAt: sessionRecord.createdAt,
+                  expiresAt: sessionRecord.expiresAt
+                })
+              };
+
+            } catch (error) {
+              console.error('세션 생성 실패:', error);
+              
+              return {
+                statusCode: 500,
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Access-Control-Allow-Origin': '*'
+                },
+                body: JSON.stringify({
+                  error: '세션 생성 중 오류가 발생했습니다'
+                })
+              };
+            }
+          };
