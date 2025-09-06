@@ -1,6 +1,10 @@
 name: Deploy API Gateway Only
 
 on:
+  push:
+    paths:
+      - 'backend/infrastructure/api-gateway-only.yaml'
+      - '.github/workflows/deploy-api-gateway.yml'
   workflow_dispatch:
     inputs:
       confirm:
@@ -11,7 +15,7 @@ on:
 jobs:
   deploy-api-gateway:
     runs-on: ubuntu-latest
-    if: github.event.inputs.confirm == 'deploy'
+    if: github.event_name == 'push' || github.event.inputs.confirm == 'deploy'
     
     steps:
     - uses: actions/checkout@v4
