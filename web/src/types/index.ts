@@ -48,7 +48,7 @@ export interface Recipe {
   instructions: string[];
   nutrition: NutritionInfo;
   tags: string[];
-  totalPrice: number;
+  totalPrice?: number;
   targetSpecific?: {
     keto?: { netCarbs: number; ketogenicRatio: number };
     baby?: { ageRange: string; allergens: string[]; texture: string };
