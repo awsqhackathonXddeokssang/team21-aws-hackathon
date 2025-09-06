@@ -2,6 +2,167 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: 'AI Chef Session Create Lambda Function'
 
 Resources:
+  # CloudWatch Log Group
+  SessionCreateLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: '/aws/lambda/ai-chef-session-create'
+      RetentionInDays: 1
+      KmsKeyId: !Ref SessionCreateLogGroupKMSKey
+
+  # KMS Key for Log Group Encryption
+  SessionCreateLogGroupKMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: 'KMS Key for Session Create Lambda Log Group'
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: Allow CloudWatch Logs
+            Effect: Allow
+            Principal:
+              Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
+            Action:
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:DescribeKey'
+            Resource: '*'
+
+  # KMS Key Alias
+  SessionCreateLogGroupKMSKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: 'alias/ai-chef-session-create-logs'
+      TargetKeyId: !Ref SessionCreateLogGroupKMSKey
+
+  # CloudWatch Metric Filter for Errors
+  SessionCreateErrorMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref SessionCreateLogGroup
+      FilterPattern: 'ERROR'
+      MetricTransformations:
+        - MetricNamespace: 'AI-Chef/Lambda'
+          MetricName: 'SessionCreateErrors'
+          MetricValue: '1'
+          DefaultValue: 0
+
+  # CloudWatch Metric Filter for Success
+  SessionCreateSuccessMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref SessionCreateLogGroup
+      FilterPattern: '세션 생성 완료'
+      MetricTransformations:
+        - MetricNamespace: 'AI-Chef/Lambda'
+          MetricName: 'SessionCreateSuccess'
+          MetricValue: '1'
+          DefaultValue: 0
+
+  # CloudWatch Alarm for High Error Rate
+  SessionCreateHighErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: 'AI-Chef-SessionCreate-HighErrorRate'
+      AlarmDescription: 'High error rate in Session Create Lambda'
+      MetricName: 'Errors'
+      Namespace: 'AWS/Lambda'
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref SessionCreateLambda
+      TreatMissingData: notBreaching
+
+  # CloudWatch Alarm for Duration
+  SessionCreateHighDurationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: 'AI-Chef-SessionCreate-HighDuration'
+      AlarmDescription: 'High duration in Session Create Lambda'
+      MetricName: 'Duration'
+      Namespace: 'AWS/Lambda'
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 25000
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref SessionCreateLambda
+      TreatMissingData: notBreaching
+
+  # CloudWatch Alarm for Throttles
+  SessionCreateThrottleAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: 'AI-Chef-SessionCreate-Throttles'
+      AlarmDescription: 'Throttles detected in Session Create Lambda'
+      MetricName: 'Throttles'
+      Namespace: 'AWS/Lambda'
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref SessionCreateLambda
+      TreatMissingData: notBreaching
+
+  # CloudWatch Dashboard
+  SessionCreateDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: 'AI-Chef-SessionCreate-Dashboard'
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "AWS/Lambda", "Invocations", "FunctionName", "${SessionCreateLambda}" ],
+                  [ ".", "Errors", ".", "." ],
+                  [ ".", "Duration", ".", "." ],
+                  [ ".", "Throttles", ".", "." ]
+                ],
+                "period": 300,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "Session Create Lambda Metrics"
+              }
+            },
+            {
+              "type": "log",
+              "x": 0,
+              "y": 6,
+              "width": 24,
+              "height": 6,
+              "properties": {
+                "query": "SOURCE '${SessionCreateLogGroup}'\n| fields @timestamp, @message\n| sort @timestamp desc\n| limit 100",
+                "region": "${AWS::Region}",
+                "title": "Recent Logs"
+              }
+            }
+          ]
+        }
+
   SessionCreateLambdaRole:
     Type: AWS::IAM::Role
     Properties:
@@ -23,9 +184,30 @@ Resources:
                 Action:
                   - dynamodb:PutItem
                 Resource: 'arn:aws:dynamodb:*:*:table/ai-chef-sessions'
+        - PolicyName: CloudWatchLogsAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:DescribeLogGroups
+                  - logs:DescribeLogStreams
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/ai-chef-session-create:*'
+              - Effect: Allow
+                Action:
+                  - kms:Encrypt
+                  - kms:Decrypt
+                  - kms:ReEncrypt*
+                  - kms:GenerateDataKey*
+                  - kms:DescribeKey
+                Resource: !GetAtt SessionCreateLogGroupKMSKey.Arn
 
   SessionCreateLambda:
     Type: AWS::Lambda::Function
+    DependsOn: SessionCreateLogGroup
     DeletionPolicy: Retain
     UpdateReplacePolicy: Delete
     Properties:
