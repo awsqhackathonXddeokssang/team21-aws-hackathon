@@ -43,6 +43,11 @@ exports.handler = async (event) => {
         const session = {
             sessionId: getResult.Item.sessionId.S,
             status: getResult.Item.status.S,
+            recipeStatus: getResult.Item.recipeStatus?.S || 'pending',
+            nutritionStatus: getResult.Item.nutritionStatus?.S || 'pending',
+            imageStatus: getResult.Item.imageStatus?.S || 'pending',
+            priceStatus: getResult.Item.priceStatus?.S || 'pending',
+            progress: getResult.Item.progress?.N ? parseInt(getResult.Item.progress.N) : 0,
             createdAt: getResult.Item.createdAt?.S,
             updatedAt: getResult.Item.updatedAt?.S,
             expiresAt: getResult.Item.expiresAt?.S
