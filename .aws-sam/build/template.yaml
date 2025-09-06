@@ -1,21 +1,59 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: AI Chef Complete Backend - All Functions and API Gateway
+Description: AI Chef Complete Backend Infrastructure
 Globals:
   Function:
-    Runtime: nodejs18.x
+    Runtime: python3.11
     Timeout: 30
     MemorySize: 256
     Environment:
       Variables:
-        SESSIONS_TABLE_NAME: ai-chef-sessions
-        RESULTS_TABLE_NAME: ai-chef-results
+        SESSIONS_TABLE_NAME:
+          Ref: SessionsTable
+        RESULTS_TABLE_NAME:
+          Ref: ResultsTable
   Api:
     Cors:
       AllowMethods: '''GET,POST,PUT,DELETE,OPTIONS'''
       AllowHeaders: '''Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'''
       AllowOrigin: '''*'''
 Resources:
+  SessionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: ai-chef-sessions
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+      - AttributeName: sessionId
+        AttributeType: S
+      KeySchema:
+      - AttributeName: sessionId
+        KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: TTL
+        Enabled: true
+  ResultsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: ai-chef-results
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+      - AttributeName: sessionId
+        AttributeType: S
+      KeySchema:
+      - AttributeName: sessionId
+        KeyType: HASH
+  NutritionTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: ai-chef-nutrition
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+      - AttributeName: ingredient
+        AttributeType: S
+      KeySchema:
+      - AttributeName: ingredient
+        KeyType: HASH
   AiChefApi:
     Type: AWS::Serverless::Api
     Properties:
@@ -24,22 +62,13 @@ Resources:
   SessionCreateFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: ai-chef-session-create-new
+      FunctionName: ai-chef-session-create
       CodeUri: SessionCreateFunction
       Handler: index.handler
       Policies:
-      - Version: '2012-10-17'
-        Statement:
-        - Effect: Allow
-          Action:
-          - dynamodb:PutItem
-          - dynamodb:GetItem
-          - dynamodb:UpdateItem
-          - dynamodb:DeleteItem
-          - dynamodb:Query
-          - dynamodb:Scan
-          Resource:
-          - arn:aws:dynamodb:us-east-1:*:table/ai-chef-sessions
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: SessionsTable
       Events:
         CreateSession:
           Type: Api
@@ -53,22 +82,15 @@ Resources:
   SessionUpdateFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: ai-chef-session-update-new
+      FunctionName: ai-chef-session-update
       CodeUri: SessionUpdateFunction
       Handler: index.handler
       Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: SessionsTable
       - Version: '2012-10-17'
         Statement:
-        - Effect: Allow
-          Action:
-          - dynamodb:PutItem
-          - dynamodb:GetItem
-          - dynamodb:UpdateItem
-          - dynamodb:DeleteItem
-          - dynamodb:Query
-          - dynamodb:Scan
-          Resource:
-          - arn:aws:dynamodb:us-east-1:*:table/ai-chef-sessions
         - Effect: Allow
           Action:
           - bedrock:InvokeModel
@@ -86,19 +108,13 @@ Resources:
   SessionStatusFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: ai-chef-session-status-new
+      FunctionName: ai-chef-session-status
       CodeUri: SessionStatusFunction
       Handler: index.handler
       Policies:
-      - Version: '2012-10-17'
-        Statement:
-        - Effect: Allow
-          Action:
-          - dynamodb:GetItem
-          - dynamodb:Query
-          - dynamodb:Scan
-          Resource:
-          - arn:aws:dynamodb:us-east-1:*:table/ai-chef-sessions
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: SessionsTable
       Events:
         GetStatus:
           Type: Api
@@ -112,25 +128,16 @@ Resources:
   RecipeFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: ai-chef-recipe-new
+      FunctionName: ai-chef-recipe
       CodeUri: RecipeFunction
       Handler: index.handler
       Timeout: 300
-      MemorySize: 512
       Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: SessionsTable
       - Version: '2012-10-17'
         Statement:
-        - Effect: Allow
-          Action:
-          - dynamodb:PutItem
-          - dynamodb:GetItem
-          - dynamodb:UpdateItem
-          - dynamodb:DeleteItem
-          - dynamodb:Query
-          - dynamodb:Scan
-          Resource:
-          - arn:aws:dynamodb:us-east-1:*:table/ai-chef-sessions
-          - arn:aws:dynamodb:us-east-1:*:table/ai-chef-results
         - Effect: Allow
           Action:
           - bedrock:InvokeModel
@@ -140,25 +147,16 @@ Resources:
   RecipeWithRagFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: ai-chef-create-recipe-with-rag-new
+      FunctionName: ai-chef-create-recipe-with-rag
       CodeUri: RecipeWithRagFunction
       Handler: index.handler
       Timeout: 300
-      MemorySize: 512
       Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: SessionsTable
       - Version: '2012-10-17'
         Statement:
-        - Effect: Allow
-          Action:
-          - dynamodb:PutItem
-          - dynamodb:GetItem
-          - dynamodb:UpdateItem
-          - dynamodb:DeleteItem
-          - dynamodb:Query
-          - dynamodb:Scan
-          Resource:
-          - arn:aws:dynamodb:us-east-1:*:table/ai-chef-sessions
-          - arn:aws:dynamodb:us-east-1:*:table/ai-chef-results
         - Effect: Allow
           Action:
           - bedrock:InvokeModel
@@ -168,25 +166,16 @@ Resources:
   PriceFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: ai-chef-price-new
+      FunctionName: ai-chef-price
       CodeUri: PriceFunction
       Handler: index.handler
       Timeout: 60
-      MemorySize: 512
       Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: SessionsTable
       - Version: '2012-10-17'
         Statement:
-        - Effect: Allow
-          Action:
-          - dynamodb:PutItem
-          - dynamodb:GetItem
-          - dynamodb:UpdateItem
-          - dynamodb:DeleteItem
-          - dynamodb:Query
-          - dynamodb:Scan
-          Resource:
-          - arn:aws:dynamodb:us-east-1:*:table/ai-chef-sessions
-          - arn:aws:dynamodb:us-east-1:*:table/ai-chef-results
         - Effect: Allow
           Action:
           - secretsmanager:GetSecretValue
@@ -196,49 +185,69 @@ Resources:
   NutritionCalculatorFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: ai-chef-nutrition-calculator-new
+      FunctionName: ai-chef-nutrition-calculator
       CodeUri: NutritionCalculatorFunction
       Handler: index.handler
       Timeout: 60
-      MemorySize: 512
+      Environment:
+        Variables:
+          NUTRITION_TABLE_NAME:
+            Ref: NutritionTable
       Policies:
-      - Version: '2012-10-17'
-        Statement:
-        - Effect: Allow
-          Action:
-          - dynamodb:PutItem
-          - dynamodb:GetItem
-          - dynamodb:UpdateItem
-          - dynamodb:DeleteItem
-          - dynamodb:Query
-          - dynamodb:Scan
-          Resource:
-          - arn:aws:dynamodb:us-east-1:*:table/ai-chef-sessions
-          - arn:aws:dynamodb:us-east-1:*:table/ai-chef-results
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: SessionsTable
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: NutritionTable
     Metadata:
       SamResourceId: NutritionCalculatorFunction
+  NutritionLookupFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ai-chef-recipe-nutrition-lookup
+      CodeUri: NutritionLookupFunction
+      Handler: index.handler
+      Environment:
+        Variables:
+          NUTRITION_TABLE_NAME:
+            Ref: NutritionTable
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: NutritionTable
+    Metadata:
+      SamResourceId: NutritionLookupFunction
+  NutritionInitializerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ai-chef-nutrition-data-initializer
+      CodeUri: NutritionInitializerFunction
+      Handler: index.handler
+      Timeout: 300
+      Environment:
+        Variables:
+          NUTRITION_TABLE_NAME:
+            Ref: NutritionTable
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: NutritionTable
+    Metadata:
+      SamResourceId: NutritionInitializerFunction
   RecipeImageGeneratorFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: ai-chef-recipe-image-generator-new
+      FunctionName: ai-chef-recipe-image-generator
       CodeUri: RecipeImageGeneratorFunction
       Handler: index.handler
       Timeout: 60
-      MemorySize: 1024
       Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: SessionsTable
       - Version: '2012-10-17'
         Statement:
-        - Effect: Allow
-          Action:
-          - dynamodb:PutItem
-          - dynamodb:GetItem
-          - dynamodb:UpdateItem
-          - dynamodb:DeleteItem
-          - dynamodb:Query
-          - dynamodb:Scan
-          Resource:
-          - arn:aws:dynamodb:us-east-1:*:table/ai-chef-sessions
-          - arn:aws:dynamodb:us-east-1:*:table/ai-chef-results
         - Effect: Allow
           Action:
           - bedrock:InvokeModel
@@ -248,23 +257,16 @@ Resources:
   ProcessFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: ai-chef-process-new
+      FunctionName: ai-chef-process
       CodeUri: ProcessFunction
       Handler: index.handler
       Timeout: 300
       Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: SessionsTable
       - Version: '2012-10-17'
         Statement:
-        - Effect: Allow
-          Action:
-          - dynamodb:PutItem
-          - dynamodb:GetItem
-          - dynamodb:UpdateItem
-          - dynamodb:DeleteItem
-          - dynamodb:Query
-          - dynamodb:Scan
-          Resource:
-          - arn:aws:dynamodb:us-east-1:*:table/ai-chef-sessions
         - Effect: Allow
           Action:
           - states:StartExecution
@@ -283,42 +285,29 @@ Resources:
   CombineFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: ai-chef-combine-new
+      FunctionName: ai-chef-combine
       CodeUri: CombineFunction
       Handler: index.handler
       Timeout: 60
       Policies:
-      - Version: '2012-10-17'
-        Statement:
-        - Effect: Allow
-          Action:
-          - dynamodb:PutItem
-          - dynamodb:GetItem
-          - dynamodb:UpdateItem
-          - dynamodb:DeleteItem
-          - dynamodb:Query
-          - dynamodb:Scan
-          Resource:
-          - arn:aws:dynamodb:us-east-1:*:table/ai-chef-sessions
-          - arn:aws:dynamodb:us-east-1:*:table/ai-chef-results
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: SessionsTable
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: ResultsTable
     Metadata:
       SamResourceId: CombineFunction
   ResultFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: ai-chef-result-new
+      FunctionName: ai-chef-result
       CodeUri: ResultFunction
       Handler: index.handler
       Policies:
-      - Version: '2012-10-17'
-        Statement:
-        - Effect: Allow
-          Action:
-          - dynamodb:GetItem
-          - dynamodb:Query
-          - dynamodb:Scan
-          Resource:
-          - arn:aws:dynamodb:us-east-1:*:table/ai-chef-results
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: ResultsTable
       Events:
         GetResult:
           Type: Api
@@ -332,7 +321,7 @@ Resources:
   AiChefWorkflow:
     Type: AWS::Serverless::StateMachine
     Properties:
-      Name: ai-chef-workflow-new
+      Name: ai-chef-workflow
       Definition:
         Comment: AI Chef Recipe Generation Workflow
         StartAt: ParallelProcessing
@@ -367,15 +356,6 @@ Resources:
                     - NutritionCalculatorFunction
                     - Arn
                   End: true
-            - StartAt: GenerateImage
-              States:
-                GenerateImage:
-                  Type: Task
-                  Resource:
-                    Fn::GetAtt:
-                    - RecipeImageGeneratorFunction
-                    - Arn
-                  End: true
             Next: CombineResults
           CombineResults:
             Type: Task
@@ -396,9 +376,6 @@ Resources:
             Ref: NutritionCalculatorFunction
       - LambdaInvokePolicy:
           FunctionName:
-            Ref: RecipeImageGeneratorFunction
-      - LambdaInvokePolicy:
-          FunctionName:
             Ref: CombineFunction
 Outputs:
   ApiGatewayUrl:
@@ -410,13 +387,15 @@ Outputs:
         Fn::Sub: ${AWS::StackName}-ApiUrl
   SessionsTableName:
     Description: DynamoDB Sessions Table Name
-    Value: ai-chef-sessions
+    Value:
+      Ref: SessionsTable
     Export:
       Name:
         Fn::Sub: ${AWS::StackName}-SessionsTable
   ResultsTableName:
     Description: DynamoDB Results Table Name
-    Value: ai-chef-results
+    Value:
+      Ref: ResultsTable
     Export:
       Name:
         Fn::Sub: ${AWS::StackName}-ResultsTable
