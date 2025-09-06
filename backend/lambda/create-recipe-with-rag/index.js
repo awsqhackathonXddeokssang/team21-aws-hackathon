@@ -1,7 +1,7 @@
 const { BedrockRuntimeClient, InvokeModelCommand } = require('@aws-sdk/client-bedrock-runtime');
 const { Client } = require('@opensearch-project/opensearch');
 const { AwsSigv4Signer } = require('@opensearch-project/opensearch/aws');
-const { DynamoDBClient, GetItemCommand, PutItemCommand } = require('@aws-sdk/client-dynamodb');
+const { DynamoDBClient, GetItemCommand, PutItemCommand, UpdateItemCommand } = require('@aws-sdk/client-dynamodb');
 
 const bedrock = new BedrockRuntimeClient({ region: 'us-east-1' });
 const dynamoClient = new DynamoDBClient({ region: 'us-east-1' });
@@ -198,12 +198,38 @@ exports.handler = async (event) => {
             };
         }
 
+        // Update recipe status to processing
+        try {
+            await dynamoClient.send(new UpdateItemCommand({
+                TableName: 'ai-chef-sessions',
+                Key: { sessionId: { S: sessionId } },
+                UpdateExpression: 'SET recipeStatus = :status',
+                ExpressionAttributeValues: { ':status': { S: 'processing' } }
+            }));
+            console.log(`✅ Recipe status updated to processing for session: ${sessionId}`);
+        } catch (e) {
+            console.error(`❌ Failed to update recipe status to processing: ${e}`);
+        }
+
         // 페이로드에서 프로필 직접 사용 (Step Functions에서 전달)
         const profile = event.profile || await getSessionProfile(sessionId);
         const recipe = await generateRecipe(profile);
         
         // DynamoDB에 레시피 저장
         await saveRecipeToResults(sessionId, recipe);
+
+        // Update recipe status to completed
+        try {
+            await dynamoClient.send(new UpdateItemCommand({
+                TableName: 'ai-chef-sessions',
+                Key: { sessionId: { S: sessionId } },
+                UpdateExpression: 'SET recipeStatus = :status',
+                ExpressionAttributeValues: { ':status': { S: 'completed' } }
+            }));
+            console.log(`✅ Recipe status updated to completed for session: ${sessionId}`);
+        } catch (e) {
+            console.error(`❌ Failed to update recipe status to completed: ${e}`);
+        }
 
         return {
             statusCode: 200,

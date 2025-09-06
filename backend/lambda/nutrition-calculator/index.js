@@ -219,6 +219,14 @@ exports.handler = async (event) => {
         
         // 세션 상태 업데이트 (85% 진행률)
         await updateSessionStatus(sessionId, 85);
+        
+        // Update nutritionStatus to processing
+        await dynamoClient.send(new UpdateItemCommand({
+            TableName: 'ai-chef-sessions',
+            Key: { sessionId: { S: sessionId } },
+            UpdateExpression: 'SET nutritionStatus = :status',
+            ExpressionAttributeValues: { ':status': { S: 'processing' } }
+        }));
 
         // 1. OpenSearch에서 영양 데이터 검색 시도
         const nutritionData = await searchNutritionData(recipe.ingredients || []);
@@ -239,6 +247,14 @@ exports.handler = async (event) => {
 
         // 세션 상태 업데이트 (90% 진행률)
         await updateSessionStatus(sessionId, 90);
+        
+        // Update nutritionStatus to completed
+        await dynamoClient.send(new UpdateItemCommand({
+            TableName: 'ai-chef-sessions',
+            Key: { sessionId: { S: sessionId } },
+            UpdateExpression: 'SET nutritionStatus = :status',
+            ExpressionAttributeValues: { ':status': { S: 'completed' } }
+        }));
 
         return {
             nutrition: finalNutrition,
@@ -250,6 +266,13 @@ exports.handler = async (event) => {
         
         try {
             await updateSessionStatus(event.sessionId, 85, 'failed');
+            // Update nutritionStatus to failed
+            await dynamoClient.send(new UpdateItemCommand({
+                TableName: 'ai-chef-sessions',
+                Key: { sessionId: { S: event.sessionId } },
+                UpdateExpression: 'SET nutritionStatus = :status',
+                ExpressionAttributeValues: { ':status': { S: 'failed' } }
+            }));
         } catch (dbError) {
             console.error('Error updating failed status:', dbError);
         }
