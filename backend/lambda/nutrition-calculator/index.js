@@ -161,6 +161,7 @@ async function calculateNutritionWithAI(recipe, profile) {
             } catch (parseError) {
                 console.error('JSON parse error:', parseError);
                 console.error('Raw JSON:', jsonMatch[0]);
+                // parseError 발생 시 아래 에러로 fallthrough
             }
         }
         
