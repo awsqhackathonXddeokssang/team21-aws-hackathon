@@ -73,15 +73,20 @@ async function searchNutritionData(ingredients) {
 }
 
 async function calculateNutritionWithAI(recipe, profile) {
+    const ingredients = recipe?.ingredients || [];
+    const ingredientsList = Array.isArray(ingredients) 
+        ? ingredients.map(ing => typeof ing === 'string' ? ing : ing.name || ing).join(', ')
+        : 'No ingredients available';
+        
     const prompt = `다음 레시피의 정확한 영양소를 계산해주세요:
 
-레시피: ${recipe.recipeName}
-재료: ${recipe.ingredients.join(', ')}
-인분: ${profile.servings || 2}인분
+레시피: ${recipe?.recipeName || 'Unknown Recipe'}
+재료: ${ingredientsList}
+인분: ${profile?.servings || 2}인분
 
 사용자 프로필:
-- 목표: ${profile.target || '일반'}
-- 탄수화물 제한: ${profile.carbLimit || 50}g
+- 목표: ${profile?.target || '일반'}
+- 탄수화물 제한: ${profile?.carbLimit || 50}g
 
 다음 JSON 형식으로만 응답해주세요:
 {
