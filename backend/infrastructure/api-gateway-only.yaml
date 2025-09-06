@@ -66,10 +66,10 @@ Resources:
         Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:ai-chef-session-create/invocations'
       MethodResponses:
         - StatusCode: 200
-          ResponseHeaders:
-            Access-Control-Allow-Origin: true
-            Access-Control-Allow-Headers: true
-            Access-Control-Allow-Methods: true
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
 
   # Sessions OPTIONS Method for CORS
   SessionsOptionsMethod:
@@ -107,7 +107,6 @@ Resources:
     Properties:
       RestApiId: !Ref ApiGateway
       StageName: 'prod'
-      StageDescription: 'Production stage for AI Chef API'
 
   # Lambda Permission for session-create
   SessionCreateLambdaPermission:
