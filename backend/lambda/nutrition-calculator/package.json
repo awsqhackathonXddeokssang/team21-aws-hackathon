@@ -1,0 +1,9 @@
+{
+  "name": "nutrition-calculator",
+  "version": "1.0.0",
+  "dependencies": {
+    "@opensearch-project/opensearch": "^2.3.0",
+    "@aws-sdk/client-bedrock-runtime": "^3.0.0",
+    "@aws-sdk/client-dynamodb": "^3.0.0"
+  }
+}
