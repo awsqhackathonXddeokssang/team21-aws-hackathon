@@ -1,0 +1,185 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'AI Chef Session Update Lambda Function'
+
+Resources:
+  # CloudWatch Log Group (최적화)
+  SessionUpdateLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: '/aws/lambda/ai-chef-session-update'
+      RetentionInDays: 7
+
+  # CloudWatch Alarm for Errors (최소한)
+  SessionUpdateErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: 'AI-Chef-SessionUpdate-Errors'
+      AlarmDescription: 'Error monitoring for Session Update Lambda'
+      MetricName: 'Errors'
+      Namespace: 'AWS/Lambda'
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 3
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref SessionUpdateLambda
+      TreatMissingData: notBreaching
+
+  SessionUpdateLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem
+                Resource: 'arn:aws:dynamodb:*:*:table/ai-chef-sessions'
+        - PolicyName: BedrockAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource: '*'
+        - PolicyName: CloudWatchLogsAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/ai-chef-session-update:*'
+
+  SessionUpdateLambda:
+    Type: AWS::Lambda::Function
+    DependsOn: SessionUpdateLogGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Delete
+    Properties:
+      FunctionName: 'ai-chef-session-update'
+      Runtime: nodejs18.x
+      Handler: index.handler
+      Role: !GetAtt SessionUpdateLambdaRole.Arn
+      Timeout: 30
+      MemorySize: 256
+      Environment:
+        Variables:
+          SESSIONS_TABLE_NAME: 'ai-chef-sessions'
+      Code:
+        ZipFile: |
+          const { DynamoDBClient, UpdateItemCommand, GetItemCommand } = require('@aws-sdk/client-dynamodb');
+          const { BedrockRuntimeClient, InvokeModelCommand } = require('@aws-sdk/client-bedrock-runtime');
+
+          const dynamodb = new DynamoDBClient({ region: process.env.AWS_REGION });
+          const bedrock = new BedrockRuntimeClient({ region: process.env.AWS_REGION });
+
+          exports.handler = async (event, context) => {
+              console.log('세션 업데이트 요청:', JSON.stringify(event));
+              
+              if (event.httpMethod === 'OPTIONS') {
+                  return {
+                      statusCode: 200,
+                      headers: {
+                          'Access-Control-Allow-Origin': '*',
+                          'Access-Control-Allow-Headers': 'Content-Type',
+                          'Access-Control-Allow-Methods': 'POST, OPTIONS'
+                      },
+                      body: ''
+                  };
+              }
+              
+              try {
+                  const body = JSON.parse(event.body);
+                  const { sessionId, userPrompt } = body;
+                  
+                  if (!sessionId || !userPrompt) {
+                      return {
+                          statusCode: 400,
+                          headers: {
+                              'Content-Type': 'application/json',
+                              'Access-Control-Allow-Origin': '*'
+                          },
+                          body: JSON.stringify({
+                              error: 'sessionId와 userPrompt가 필요합니다'
+                          })
+                      };
+                  }
+                  
+                  // 세션 업데이트 로직 (간단한 버전)
+                  const updateParams = {
+                      TableName: process.env.SESSIONS_TABLE_NAME,
+                      Key: {
+                          sessionId: { S: sessionId }
+                      },
+                      UpdateExpression: 'SET userPrompt = :prompt, lastActivity = :now',
+                      ExpressionAttributeValues: {
+                          ':prompt': { S: userPrompt },
+                          ':now': { S: new Date().toISOString() }
+                      }
+                  };
+                  
+                  await dynamodb.send(new UpdateItemCommand(updateParams));
+                  
+                  console.log('세션 업데이트 완료:', sessionId);
+                  
+                  return {
+                      statusCode: 200,
+                      headers: {
+                          'Content-Type': 'application/json',
+                          'Access-Control-Allow-Origin': '*'
+                      },
+                      body: JSON.stringify({
+                          sessionId: sessionId,
+                          message: '세션이 성공적으로 업데이트되었습니다',
+                          updatedAt: new Date().toISOString()
+                      })
+                  };
+                  
+              } catch (error) {
+                  console.error('세션 업데이트 실패:', error);
+                  
+                  return {
+                      statusCode: 500,
+                      headers: {
+                          'Content-Type': 'application/json',
+                          'Access-Control-Allow-Origin': '*'
+                      },
+                      body: JSON.stringify({
+                          error: '세션 업데이트 중 오류가 발생했습니다'
+                      })
+                  };
+              }
+          };
+
+  SessionUpdateLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref SessionUpdateLambda
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:*/*/*'
+
+Outputs:
+  SessionUpdateLambdaArn:
+    Description: 'Session Update Lambda Function ARN'
+    Value: !GetAtt SessionUpdateLambda.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-SessionUpdateLambdaArn'
