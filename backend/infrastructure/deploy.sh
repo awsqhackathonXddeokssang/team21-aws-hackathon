@@ -49,13 +49,13 @@ aws cloudformation deploy \
 #   --capabilities CAPABILITY_IAM \
 #   --region ${REGION}
 
-# # Deploy Combine Lambda
-# echo "🔗 Deploying Combine Lambda..."
-# aws cloudformation deploy \
-#   --template-file combine-lambda.yaml \
-#   --stack-name ai-chef-combine-lambda \
-#   --capabilities CAPABILITY_IAM \
-#   --region ${REGION}
+# Deploy Combine Lambda
+echo "🔗 Deploying Combine Lambda..."
+aws cloudformation deploy \
+  --template-file combine-lambda.yaml \
+  --stack-name ai-chef-combine-lambda \
+  --capabilities CAPABILITY_IAM \
+  --region ${REGION}
 
 # # Deploy Image Generator Lambda
 # echo "🖼️  Deploying Image Generator Lambda..."
@@ -70,3 +70,4 @@ echo "📊 Functions deployed:"
 echo "  - ai-chef-session-create"
 echo "  - ai-chef-session-update"
 echo "  - ai-chef-price"
+echo "  - ai-chef-combine"

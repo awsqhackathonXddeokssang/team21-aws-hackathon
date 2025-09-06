@@ -6,6 +6,7 @@ on:
       - 'backend/infrastructure/session-create-lambda.yaml'
       - 'backend/infrastructure/session-update-lambda.yaml'
       - 'backend/infrastructure/price-lambda.yaml'
+      - 'backend/infrastructure/combine-lambda.yaml'
       - 'backend/infrastructure/deploy.sh'
       - '.github/workflows/deploy-backend.yml'
   workflow_dispatch:
