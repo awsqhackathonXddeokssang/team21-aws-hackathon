@@ -50,8 +50,36 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
+# Get API Gateway ID from CloudFormation outputs
+API_GATEWAY_ID=$(aws cloudformation describe-stacks \
+  --stack-name ${STACK_NAME} \
+  --region ${REGION} \
+  --query 'Stacks[0].Outputs[?OutputKey==`ApiGatewayId`].OutputValue' \
+  --output text)
+
+if [ -z "$API_GATEWAY_ID" ]; then
+  echo "❌ Failed to get API Gateway ID from stack outputs"
+  exit 1
+fi
+
+echo "🔄 Creating new API Gateway deployment..."
+DEPLOYMENT_ID=$(aws apigateway create-deployment \
+  --rest-api-id ${API_GATEWAY_ID} \
+  --stage-name prod \
+  --description "Force deployment $(date)" \
+  --region ${REGION} \
+  --query 'id' \
+  --output text)
+
+if [ $? -eq 0 ]; then
+  echo "✅ New deployment created: ${DEPLOYMENT_ID}"
+else
+  echo "⚠️  Failed to create new deployment, but CloudFormation succeeded"
+fi
+
 echo "✅ API Gateway deployed successfully!"
 echo "📊 Resources deployed:"
 echo "  - ai-chef-api (API Gateway)"
 echo "  - /sessions endpoint"
+echo "  - /sessions/update endpoint"
 echo "  - CloudWatch monitoring"
