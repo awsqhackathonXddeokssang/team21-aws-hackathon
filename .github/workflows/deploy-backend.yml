@@ -23,17 +23,18 @@ jobs:
         chmod +x deploy.sh
         ./deploy.sh
     
-    - name: Deploy Step Functions
-      run: |
-        cd backend/infrastructure
-        chmod +x deploy-stepfunctions.sh
-        ./deploy-stepfunctions.sh
+    # TEMPORARILY DISABLED - Deploy only session-create Lambda
+    # - name: Deploy Step Functions
+    #   run: |
+    #     cd backend/infrastructure
+    #     chmod +x deploy-stepfunctions.sh
+    #     ./deploy-stepfunctions.sh
     
-    - name: Deploy Session API
-      run: |
-        cd backend/infrastructure
-        chmod +x deploy-session-api.sh
-        ./deploy-session-api.sh
+    # - name: Deploy Session API
+    #   run: |
+    #     cd backend/infrastructure
+    #     chmod +x deploy-session-api.sh
+    #     ./deploy-session-api.sh
     
     - name: Discord Success Notification
       if: success()

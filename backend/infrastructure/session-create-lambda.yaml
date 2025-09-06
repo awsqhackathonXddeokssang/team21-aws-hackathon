@@ -2,6 +2,31 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: 'AI Chef Session Create Lambda Function'
 
 Resources:
+  # CloudWatch Log Group (최적화)
+  SessionCreateLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: '/aws/lambda/ai-chef-session-create'
+      RetentionInDays: 7
+
+  # CloudWatch Alarm for Errors (최소한)
+  SessionCreateErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: 'AI-Chef-SessionCreate-Errors'
+      AlarmDescription: 'Error monitoring for Session Create Lambda'
+      MetricName: 'Errors'
+      Namespace: 'AWS/Lambda'
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 3
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref SessionCreateLambda
+      TreatMissingData: notBreaching
+
   SessionCreateLambdaRole:
     Type: AWS::IAM::Role
     Properties:
@@ -23,9 +48,20 @@ Resources:
                 Action:
                   - dynamodb:PutItem
                 Resource: 'arn:aws:dynamodb:*:*:table/ai-chef-sessions'
+        - PolicyName: CloudWatchLogsAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/ai-chef-session-create:*'
 
   SessionCreateLambda:
     Type: AWS::Lambda::Function
+    DependsOn: SessionCreateLogGroup
     DeletionPolicy: Retain
     UpdateReplacePolicy: Delete
     Properties:

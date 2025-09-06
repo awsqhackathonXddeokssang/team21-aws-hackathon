@@ -1,2 +1,1 @@
-boto3>=1.26.0
-typing-extensions>=4.0.0
+# boto3 - Lambda 기본 포함
