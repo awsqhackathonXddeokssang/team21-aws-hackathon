@@ -25,6 +25,7 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
         session_id = event.get('sessionId')
         recipe_result = event.get('recipeResult')
         pricing_result = event.get('pricingResult')
+        image_result = event.get('imageResult')
         profile = event.get('profile')
         
         # JSON 문자열 파싱
@@ -35,6 +36,7 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
         logger.info(f"세션 ID: {session_id}")
         logger.info(f"레시피 결과 타입: {type(recipe_result)}")
         logger.info(f"가격 결과 타입: {type(pricing_result)}")
+        logger.info(f"이미지 결과 타입: {type(image_result)}")
         logger.info(f"프로필 타입: {type(profile)}")
         
         if recipe_result:
@@ -59,7 +61,7 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
         # 레시피와 가격 데이터 결합
         logger.info("레시피와 가격 데이터 결합 시작...")
         combined_result = combine_recipe_with_prices(
-            recipe_result, pricing_result, session_id, profile
+            recipe_result, pricing_result, image_result, session_id, profile
         )
         
         logger.info("데이터 결합 완료, 최종 결과 저장 중...")
@@ -101,7 +103,7 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
             }
         }
 
-def combine_recipe_with_prices(recipe_result: Dict, pricing_result: Dict, 
+def combine_recipe_with_prices(recipe_result: Dict, pricing_result: Dict, image_result: Dict,
                              session_id: str, profile: Dict = None) -> Dict:
     """레시피와 가격 데이터 결합"""
     
@@ -153,6 +155,22 @@ def combine_recipe_with_prices(recipe_result: Dict, pricing_result: Dict,
         logger.info(f"가격 데이터: {pricing_result}")
         pricing = pricing_result
         
+        # 이미지 데이터 처리
+        logger.info("이미지 데이터 처리...")
+        logger.info(f"이미지 데이터: {image_result}")
+        recipe_image = None
+        image_available = False
+        
+        if image_result and isinstance(image_result, dict):
+            if image_result.get('success') and image_result.get('imageUrl'):
+                recipe_image = image_result.get('imageUrl')
+                image_available = True
+                logger.info(f"이미지 URL 추출 성공: {recipe_image}")
+            else:
+                logger.info("이미지 생성 실패 또는 URL 없음")
+        else:
+            logger.info("이미지 결과가 없거나 올바르지 않은 형식")
+        
         # 영양 정보 처리
         logger.info("영양 정보 처리 중...")
         nutrition_data = recipe.get('nutrition', {}) if isinstance(recipe, dict) else {}
@@ -193,9 +211,9 @@ def combine_recipe_with_prices(recipe_result: Dict, pricing_result: Dict,
                 'shoppingInfo': shopping_info,
                 'totalEstimatedCost': total_cost,
                 'generatedAt': datetime.now().isoformat(),
-                'recipeImage': None,  # Recipe Image Generator 연동 시 사용
+                'recipeImage': recipe_image,
                 'profile': profile,
-                'summary': create_summary(recipe, pricing, nutrition, profile)
+                'summary': create_summary(recipe, pricing, nutrition, profile, image_available)
             },
             'error': None,
             'metadata': {
@@ -276,7 +294,7 @@ def create_shopping_info(pricing: Dict) -> Dict:
     logger.info(f"생성된 쇼핑 정보: {shopping_info}")
     return shopping_info
 
-def create_summary(recipe: Dict, pricing: Dict, nutrition: Dict, profile: Dict) -> Dict:
+def create_summary(recipe: Dict, pricing: Dict, nutrition: Dict, profile: Dict, image_available: bool = False) -> Dict:
     """요약 정보 생성"""
     logger.info("요약 정보 생성 중...")
     
@@ -286,7 +304,7 @@ def create_summary(recipe: Dict, pricing: Dict, nutrition: Dict, profile: Dict) 
         'recipeAvailable': bool(recipe.get('name') or recipe.get('recipeName')) if isinstance(recipe, dict) else False,
         'pricingAvailable': pricing_summary.get('foundIngredients', 0) > 0,
         'nutritionAvailable': bool(nutrition.get('total')),
-        'imageAvailable': False,  # Recipe Image Generator 연동 시 True
+        'imageAvailable': image_available,
         'profileAvailable': bool(profile),
         'ingredientsFound': pricing_summary.get('foundIngredients', 0),
         'totalIngredients': pricing_summary.get('totalIngredients', 0),
