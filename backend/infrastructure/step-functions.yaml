@@ -72,6 +72,27 @@ Resources:
                   }
                 },
                 {
+                  "StartAt": "CalculateNutrition",
+                  "States": {
+                    "CalculateNutrition": {
+                      "Type": "Task",
+                      "Resource": "arn:aws:states:::lambda:invoke",
+                      "Parameters": {
+                        "FunctionName": "ai-chef-nutrition-calculator",
+                        "Payload": {
+                          "sessionId.$": "$.sessionId",
+                          "profile.$": "$.profile",
+                          "recipeData.$": "$.recipeResult.recipe"
+                        }
+                      },
+                      "ResultSelector": {
+                        "nutrition.$": "$.Payload"
+                      },
+                      "End": true
+                    }
+                  }
+                },
+                {
                   "StartAt": "GenerateRecipeImage",
                   "States": {
                     "GenerateRecipeImage": {
@@ -105,7 +126,8 @@ Resources:
                   "profile.$": "$.profile",
                   "recipeResult.$": "$.recipeResult.recipe",
                   "pricingResult.$": "$.parallelResults[0].pricing",
-                  "imageResult.$": "$.parallelResults[1].image"
+                  "nutritionResult.$": "$.parallelResults[1].nutrition",
+                  "imageResult.$": "$.parallelResults[2].image"
                 }
               },
               "End": true
