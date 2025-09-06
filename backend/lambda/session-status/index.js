@@ -47,7 +47,6 @@ exports.handler = async (event) => {
             nutritionStatus: getResult.Item.nutritionStatus?.S || 'pending',
             imageStatus: getResult.Item.imageStatus?.S || 'pending',
             priceStatus: getResult.Item.priceStatus?.S || 'pending',
-            progress: getResult.Item.progress?.N ? parseInt(getResult.Item.progress.N) : 0,
             createdAt: getResult.Item.createdAt?.S,
             updatedAt: getResult.Item.updatedAt?.S,
             expiresAt: getResult.Item.expiresAt?.S
