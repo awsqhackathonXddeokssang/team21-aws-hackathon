@@ -1027,7 +1027,7 @@ export default function ChatScreen() {
                           </div>
                           
                           {vendor.items.map((item: any, itemIndex: number) => {
-                            const isChecked = checkedItems[item.ingredient] || false;
+                            const isChecked = checkedItems[item.ingredient] ?? true;
                             
                             return (
                               <div key={itemIndex} className="flex items-start py-3 border-t border-gray-100">
