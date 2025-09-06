@@ -112,3 +112,11 @@ Resources:
               };
             }
           };
+
+  SessionCreateLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref SessionCreateLambda
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:68k4rbx0g4/*/*'
