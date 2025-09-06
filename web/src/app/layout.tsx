@@ -23,9 +23,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ko">
+    <html lang="ko" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gray-100`}
+        suppressHydrationWarning
       >
         <div className="max-w-[375px] mx-auto bg-white min-h-screen shadow-xl">
           {children}

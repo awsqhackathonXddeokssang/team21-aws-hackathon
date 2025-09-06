@@ -1,10 +1,9 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { UserTarget, ChatMessage, Recipe } from '@/types';
+import { UserTarget, ChatMessage, Recipe, SessionStatus } from '@/types';
 import { targetInfos } from '@/lib/mockData';
 import { Loader2, ChefHat } from 'lucide-react';
-import ResultModal from './ResultModal';
 import { ApiService } from '@/lib/api';
 import { createScrollHandler } from '@/lib/scrollUtils';
 import { API_CONFIG } from '@/config/api';
@@ -31,9 +30,13 @@ export default function ChatScreen() {
   const [sessionRetryCount, setSessionRetryCount] = useState(0);
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [sessionStatus, setSessionStatus] = useState<SessionStatus | null>(null);
+  const [nutritionData, setNutritionData] = useState<any>(null);
+  const [priceData, setPriceData] = useState<any>(null);
 
   // 자동 스크롤을 위한 ref
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const statusPollingInterval = useRef<NodeJS.Timeout | null>(null);
 
   // 스마트 스크롤 핸들러 생성
   const scrollToBottom = createScrollHandler(messagesEndRef);
@@ -52,6 +55,62 @@ export default function ChatScreen() {
       default:
         return { progress: 10, message: '🚀 처리를 시작하고 있어요...' };
     }
+  };
+
+  // 영양/가격 정보 추가 폴링
+  const startStatusPolling = () => {
+    // 기존 폴링 정리
+    if (statusPollingInterval.current) {
+      clearInterval(statusPollingInterval.current);
+    }
+
+    statusPollingInterval.current = setInterval(async () => {
+      try {
+        // 상태 체크
+        const statusResponse = await fetch(`${API_CONFIG.BASE_URL}/sessions/${sessionId}/status`);
+        const statusData = await statusResponse.json();
+        setSessionStatus(statusData);
+        
+        // 영양정보 완료 체크
+        if (statusData.nutritionStatus === 'completed' && !nutritionData) {
+          const resultResponse = await fetch(`${API_CONFIG.BASE_URL}/sessions/${sessionId}/result`);
+          const resultData = await resultResponse.json();
+          if (resultData.result?.nutrition) {
+            setNutritionData(resultData.result.nutrition);
+          }
+        }
+        
+        // 가격정보 완료 체크
+        if (statusData.priceStatus === 'completed' && !priceData) {
+          const resultResponse = await fetch(`${API_CONFIG.BASE_URL}/sessions/${sessionId}/result`);
+          const resultData = await resultResponse.json();
+          if (resultData.result?.price) {
+            setPriceData(resultData.result.price);
+            // 가격 데이터로 ingredients 업데이트
+            if (currentRecipe && resultData.result.price?.ingredients) {
+              setCurrentRecipe(prev => ({
+                ...prev!,
+                ingredients: Object.entries(resultData.result.price.ingredients).map(([name, prices]: [string, any]) => ({
+                  name,
+                  amount: '',
+                  prices: prices.slice(0, 3) // 상위 3개만
+                }))
+              }));
+            }
+          }
+        }
+        
+        // 모든 처리 완료 시 폴링 중지
+        if (statusData.nutritionStatus === 'completed' && 
+            statusData.priceStatus === 'completed' && 
+            nutritionData && priceData) {
+          clearInterval(statusPollingInterval.current!);
+          statusPollingInterval.current = null;
+        }
+      } catch (error) {
+        console.error('Status polling error:', error);
+      }
+    }, 3000); // 3초마다 체크
   };
 
   // 폴링 로직
@@ -73,6 +132,7 @@ export default function ChatScreen() {
         const responseData = await statusResponse.json();
         console.log(`📊 Status response:`, responseData);
         console.log(`🔍 Available fields:`, Object.keys(responseData));
+        console.log(`🔍 status value:`, responseData.status);
         console.log(`🔍 recipeStatus value:`, responseData.recipeStatus);
         const { status, recipeStatus, error } = responseData;
 
@@ -82,7 +142,8 @@ export default function ChatScreen() {
         setProgressMessage(progressInfo.message);
         console.log('🔸 Current render states - showResult:', showResult, 'isLoading:', isLoading, 'currentRecipe:', !!currentRecipe);
 
-        if (recipeStatus === 'completed' || (status === 'completed' && !recipeStatus)) {
+        // status가 completed 또는 recipeStatus가 completed 중 하나만 만족해도 진행
+        if (status === 'completed' || recipeStatus === 'completed') {
           console.log('🎯 Recipe completed, transitioning to result screen');
           clearInterval(pollInterval);
           
@@ -93,8 +154,31 @@ export default function ChatScreen() {
           // 결과 캐싱
           localStorage.setItem(`recipe_${sessionId}`, JSON.stringify(recipeResult));
           
-          setCurrentRecipe(recipeResult.result.recipe);
+          // API 응답 데이터 매핑
+          const recipe = {
+            id: recipeResult.sessionId || `recipe-${Date.now()}`,
+            name: recipeResult.result.recipe.recipeName || recipeResult.result.recipe.name,
+            description: recipeResult.result.recipe.description,
+            cookingTime: 30,  // API에 없으므로 기본값
+            difficulty: 'medium' as const,  // API에 없으므로 기본값
+            servings: 2,  // API에 없으므로 기본값
+            ingredients: recipeResult.result.recipe.ingredients.map((ing: string | any) => {
+              if (typeof ing === 'string') {
+                return { name: ing, amount: '' };
+              }
+              return ing;
+            }),
+            instructions: recipeResult.result.recipe.instructions,
+            nutrition: recipeResult.result.recipe.nutrition,
+            tags: recipeResult.result.recipe.tags || [],
+            totalPrice: recipeResult.result.price?.recommendations?.totalEstimatedCost
+          };
+          setCurrentRecipe(recipe);
           setIsLoading(false);
+          setShowResult(true);  // 결과 화면 표시
+          
+          // 영양/가격 정보 추가 폴링 시작
+          startStatusPolling();
           
         } else if (status === 'failed') {
           clearInterval(pollInterval);
@@ -192,6 +276,15 @@ export default function ChatScreen() {
     initializeSession();
   }, []);
 
+  // 컴포넌트 언마운트 시 폴링 정리
+  useEffect(() => {
+    return () => {
+      if (statusPollingInterval.current) {
+        clearInterval(statusPollingInterval.current);
+      }
+    };
+  }, []);
+
   // 메시지 변경 시 자동 스크롤
   useEffect(() => {
     scrollToBottom();
@@ -199,21 +292,24 @@ export default function ChatScreen() {
 
   // 초기 AI 메시지들
   useEffect(() => {
-    const initialMessages: ChatMessage[] = [
-      {
-        id: 'greeting',
-        type: 'ai',
-        content: '안녕하세요! AI 셰프입니다 👨🍳\n맞춤형 레시피를 추천해드릴게요.\n먼저 몇 가지 여쭤볼게요!',
-        timestamp: new Date()
-      },
-      {
-        id: 'question',
-        type: 'ai',
-        content: '어떤 식단을 하고 계신가요?',
-        timestamp: new Date()
-      }
-    ];
-    setMessages(initialMessages);
+    // 클라이언트에서만 실행
+    if (typeof window !== 'undefined') {
+      const initialMessages: ChatMessage[] = [
+        {
+          id: 'greeting',
+          type: 'ai',
+          content: '안녕하세요! AI 셰프입니다 👨🍳\n맞춤형 레시피를 추천해드릴게요.\n먼저 몇 가지 여쭤볼게요!',
+          timestamp: new Date()
+        },
+        {
+          id: 'question',
+          type: 'ai',
+          content: '어떤 식단을 하고 계신가요?',
+          timestamp: new Date()
+        }
+      ];
+      setMessages(initialMessages);
+    }
   }, []);
 
   const handleTargetSelect = async (target: UserTarget) => {
@@ -842,7 +938,8 @@ export default function ChatScreen() {
 
               {activeTab === 'shopping' && (
                 <div>
-                  {currentRecipe?.ingredients ? (
+                  {sessionStatus?.priceStatus === 'completed' ? (
+                    currentRecipe?.ingredients ? (
                     <div className="space-y-4">
                       <h4 className="font-semibold text-gray-800 mb-4">필요한 재료</h4>
                       
@@ -903,9 +1000,16 @@ export default function ChatScreen() {
                         );
                       })}
                     </div>
+                    ) : (
+                      <div className="text-center py-8">
+                        <p className="text-gray-500">재료 정보를 불러오는 중...</p>
+                      </div>
+                    )
                   ) : (
-                    <div className="text-center py-8">
-                      <p className="text-gray-500">재료 정보를 불러오는 중...</p>
+                    <div className="flex flex-col items-center justify-center py-12">
+                      <Loader2 className="w-8 h-8 animate-spin text-orange-500 mb-4" />
+                      <p className="text-gray-600">최저가 정보를 조회하고 있어요...</p>
+                      <p className="text-sm text-gray-500 mt-2">잠시만 기다려주세요!</p>
                     </div>
                   )}
                   
@@ -929,7 +1033,8 @@ export default function ChatScreen() {
 
               {activeTab === 'nutrition' && (
                 <div>
-                  {currentRecipe?.nutrition ? (
+                  {sessionStatus?.nutritionStatus === 'completed' ? (
+                    currentRecipe?.nutrition ? (
                     <div className="space-y-6">
                       {/* 영양 성분 박스 */}
                       <div className="border border-gray-200 rounded-lg p-6 bg-white">
@@ -1020,9 +1125,16 @@ export default function ChatScreen() {
                         </div>
                       )}
                     </div>
+                    ) : (
+                      <div className="text-center py-8">
+                        <p className="text-gray-500">영양 정보를 불러오는 중...</p>
+                      </div>
+                    )
                   ) : (
-                    <div className="text-center py-8">
-                      <p className="text-gray-500">영양 정보를 불러오는 중...</p>
+                    <div className="flex flex-col items-center justify-center py-12">
+                      <Loader2 className="w-8 h-8 animate-spin text-orange-500 mb-4" />
+                      <p className="text-gray-600">영양 정보를 분석하고 있어요...</p>
+                      <p className="text-sm text-gray-500 mt-2">잠시만 기다려주세요!</p>
                     </div>
                   )}
                 </div>
@@ -1238,25 +1350,6 @@ export default function ChatScreen() {
         </div>
       )}
 
-      {/* ResultModal */}
-      {currentRecipe && selectedTarget && sessionId && (
-        <ResultModal
-          recipe={currentRecipe}
-          target={selectedTarget}
-          sessionId={sessionId}
-          onClose={() => setCurrentRecipe(null)}
-          onNewRecipe={() => {
-            setCurrentRecipe(null);
-            setShowResult(false);
-            setIsLoading(false);
-            setMessages([]);
-            setCurrentStep(0);
-            setConversationPhase('target');
-            setSelectedTarget(null);
-            initializeSession();
-          }}
-        />
-      )}
     </div>
   );
 }

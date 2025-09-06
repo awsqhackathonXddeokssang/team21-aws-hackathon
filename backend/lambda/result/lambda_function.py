@@ -1,5 +1,6 @@
 import json
 import boto3
+from boto3.dynamodb.conditions import Attr
 from datetime import datetime
 import logging
 from typing import Dict, Any, Optional
@@ -80,12 +81,12 @@ def get_final_result(session_id: str) -> Optional[Dict[str, Any]]:
     try:
         # sessionId로 scan하여 모든 결과 조회
         response = results_table.scan(
-            FilterExpression='sessionId = :sessionId',
-            ExpressionAttributeValues={':sessionId': session_id}
+            FilterExpression=Attr('sessionId').eq(session_id)
         )
         
         items = response.get('Items', [])
         if not items:
+            logger.info(f"No results found for session: {session_id}")
             return None
             
         # 결과를 타입별로 정리
@@ -103,6 +104,7 @@ def get_final_result(session_id: str) -> Optional[Dict[str, Any]]:
                     'createdAt': item.get('createdAt')
                 }
                 
+        logger.info(f"Found {len(items)} result items for session: {session_id}")
         return result if result else None
     except Exception as e:
         logger.error(f"Final result retrieval error: {e}")
