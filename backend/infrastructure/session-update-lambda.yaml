@@ -49,6 +49,14 @@ Resources:
                   - dynamodb:GetItem
                   - dynamodb:UpdateItem
                 Resource: 'arn:aws:dynamodb:*:*:table/ai-chef-sessions'
+        - PolicyName: StepFunctionsAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - states:StartExecution
+                Resource: 'arn:aws:states:*:*:stateMachine:ai-chef-workflow'
         - PolicyName: BedrockAccess
           PolicyDocument:
             Version: '2012-10-17'
@@ -75,8 +83,8 @@ Resources:
     UpdateReplacePolicy: Delete
     Properties:
       FunctionName: 'ai-chef-session-update'
-      Runtime: nodejs18.x
-      Handler: index.handler
+      Runtime: python3.11
+      Handler: index.lambda_handler
       Role: !GetAtt SessionUpdateLambdaRole.Arn
       Timeout: 30
       MemorySize: 256
@@ -85,89 +93,205 @@ Resources:
           SESSIONS_TABLE_NAME: 'ai-chef-sessions'
       Code:
         ZipFile: |
-          const { DynamoDBClient, UpdateItemCommand, GetItemCommand } = require('@aws-sdk/client-dynamodb');
-          const { BedrockRuntimeClient, InvokeModelCommand } = require('@aws-sdk/client-bedrock-runtime');
+          import json
+          import boto3
+          from datetime import datetime
+          import logging
+          import uuid
 
-          const dynamodb = new DynamoDBClient({ region: process.env.AWS_REGION });
-          const bedrock = new BedrockRuntimeClient({ region: process.env.AWS_REGION });
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
 
-          exports.handler = async (event, context) => {
-              console.log('세션 업데이트 요청:', JSON.stringify(event));
-              
-              if (event.httpMethod === 'OPTIONS') {
+          dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
+          stepfunctions = boto3.client('stepfunctions', region_name='us-east-1')
+          sessions_table = dynamodb.Table('ai-chef-sessions')
+
+          def lambda_handler(event, context):
+              try:
+                  http_method = event.get('httpMethod', 'POST')
+                  
+                  if http_method == 'OPTIONS':
+                      return {
+                          'statusCode': 200,
+                          'headers': {
+                              'Access-Control-Allow-Origin': '*',
+                              'Access-Control-Allow-Headers': 'Content-Type',
+                              'Access-Control-Allow-Methods': 'POST, OPTIONS'
+                          },
+                          'body': ''
+                      }
+                  
+                  if http_method == 'POST' and event.get('resource') == '/sessions':
+                      # 새 세션 생성
+                      return create_session(event, context)
+                  elif http_method == 'GET' and event.get('resource') == '/sessions':
+                      # 세션 목록 조회
+                      return list_sessions(event, context)
+                  elif http_method == 'POST' and '/session/' in event.get('resource', ''):
+                      # 세션 처리
+                      return process_session(event, context)
+                  else:
+                      # 직접 호출 (API Gateway 없이)
+                      body = json.loads(event.get('body', '{}')) if isinstance(event.get('body'), str) else event
+                      return process_session_direct(body, context)
+                      
+              except Exception as e:
+                  logger.error(f"Error: {str(e)}")
                   return {
-                      statusCode: 200,
-                      headers: {
-                          'Access-Control-Allow-Origin': '*',
-                          'Access-Control-Allow-Headers': 'Content-Type',
-                          'Access-Control-Allow-Methods': 'POST, OPTIONS'
-                      },
-                      body: ''
-                  };
+                      'statusCode': 500,
+                      'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                      'body': json.dumps({'error': 'Internal Server Error'})
+                  }
+
+          def create_session(event, context):
+              # 새 세션 생성
+              session_id = f"sess_{str(uuid.uuid4())}"
+              created_at = datetime.now().isoformat()
+              expires_at = datetime.fromtimestamp(datetime.now().timestamp() + 7200).isoformat()  # 2시간 후
+              
+              sessions_table.put_item(Item={
+                  'sessionId': session_id,
+                  'status': 'idle',
+                  'createdAt': created_at,
+                  'expiresAt': expires_at,
+                  'TTL': int(datetime.now().timestamp() + 7200)
+              })
+              
+              return {
+                  'statusCode': 200,
+                  'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                  'body': json.dumps({
+                      'sessionId': session_id,
+                      'createdAt': created_at,
+                      'expiresAt': expires_at
+                  })
+              }
+
+          def list_sessions(event, context):
+              # 세션 목록 조회 (간단한 구현)
+              return {
+                  'statusCode': 200,
+                  'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                  'body': json.dumps({'sessions': []})
+              }
+
+          def process_session(event, context):
+              # 기존 세션 처리 로직
+              session_id = event['pathParameters']['id']
+              body = json.loads(event['body'])
+              user_profile = body.get('userProfile')
+              
+              logger.info(f"Processing session: {session_id}")
+              
+              if not user_profile or 'target' not in user_profile:
+                  return {
+                      'statusCode': 400,
+                      'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                      'body': json.dumps({'success': False, 'error': 'INVALID_PROFILE', 'message': '프로필이 필요합니다.'})
+                  }
+              
+              sessions_table.update_item(
+                  Key={'sessionId': session_id},
+                  UpdateExpression="SET #status = :status, #profile = :profile, #updatedAt = :updatedAt",
+                  ExpressionAttributeNames={'#status': 'status', '#profile': 'profile', '#updatedAt': 'updatedAt'},
+                  ExpressionAttributeValues={
+                      ':status': 'processing',
+                      ':profile': user_profile,
+                      ':updatedAt': datetime.now().isoformat()
+                  }
+              )
+              
+              workflow_input = {
+                  'sessionId': session_id,
+                  'profile': {
+                      'target': user_profile.get('target'),
+                      'budget': int(user_profile.get('responses', {}).get('100', 20000)),
+                      'servings': int(user_profile.get('responses', {}).get('101', 2))
+                  }
               }
               
-              try {
-                  const body = JSON.parse(event.body);
-                  const { sessionId, userPrompt } = body;
+              response = stepfunctions.start_execution(
+                  stateMachineArn='arn:aws:states:us-east-1:491085385364:stateMachine:ai-chef-workflow',
+                  name=f'execution-{int(datetime.now().timestamp())}',
+                  input=json.dumps(workflow_input)
+              )
+              
+              return {
+                  'statusCode': 200,
+                  'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                  'body': json.dumps({
+                      'success': True,
+                      'executionId': response['executionArn'],
+                      'estimatedTime': 30,
+                      'status': 'processing',
+                      'message': '레시피 생성이 시작되었습니다.'
+                  })
+              }
+
+          def process_session_direct(body, context):
+              # 직접 호출용 (API Gateway 없이)
+              session_id = body.get('sessionId')
+              user_prompt = body.get('userPrompt')
+              user_profile = body.get('userProfile')
+              
+              if not session_id:
+                  return {
+                      'statusCode': 400,
+                      'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                      'body': json.dumps({'error': 'sessionId가 필요합니다'})
+                  }
+              
+              # 세션 업데이트
+              update_expression = "SET lastActivity = :now"
+              expression_values = {':now': datetime.now().isoformat()}
+              
+              if user_prompt:
+                  update_expression += ", userPrompt = :prompt"
+                  expression_values[':prompt'] = user_prompt
+              
+              if user_profile:
+                  update_expression += ", #profile = :profile, #status = :status"
+                  expression_values[':profile'] = user_profile
+                  expression_values[':status'] = 'processing'
                   
-                  if (!sessionId || !userPrompt) {
-                      return {
-                          statusCode: 400,
-                          headers: {
-                              'Content-Type': 'application/json',
-                              'Access-Control-Allow-Origin': '*'
-                          },
-                          body: JSON.stringify({
-                              error: 'sessionId와 userPrompt가 필요합니다'
-                          })
-                      };
+                  # Step Functions 워크플로우 시작
+                  workflow_input = {
+                      'sessionId': session_id,
+                      'profile': {
+                          'target': user_profile.get('target'),
+                          'budget': int(user_profile.get('responses', {}).get('100', 20000)),
+                          'servings': int(user_profile.get('responses', {}).get('101', 2))
+                      }
                   }
                   
-                  // 세션 업데이트 로직 (간단한 버전)
-                  const updateParams = {
-                      TableName: process.env.SESSIONS_TABLE_NAME,
-                      Key: {
-                          sessionId: { S: sessionId }
-                      },
-                      UpdateExpression: 'SET userPrompt = :prompt, lastActivity = :now',
-                      ExpressionAttributeValues: {
-                          ':prompt': { S: userPrompt },
-                          ':now': { S: new Date().toISOString() }
-                      }
-                  };
-                  
-                  await dynamodb.send(new UpdateItemCommand(updateParams));
-                  
-                  console.log('세션 업데이트 완료:', sessionId);
-                  
-                  return {
-                      statusCode: 200,
-                      headers: {
-                          'Content-Type': 'application/json',
-                          'Access-Control-Allow-Origin': '*'
-                      },
-                      body: JSON.stringify({
-                          sessionId: sessionId,
-                          message: '세션이 성공적으로 업데이트되었습니다',
-                          updatedAt: new Date().toISOString()
-                      })
-                  };
-                  
-              } catch (error) {
-                  console.error('세션 업데이트 실패:', error);
-                  
-                  return {
-                      statusCode: 500,
-                      headers: {
-                          'Content-Type': 'application/json',
-                          'Access-Control-Allow-Origin': '*'
-                      },
-                      body: JSON.stringify({
-                          error: '세션 업데이트 중 오류가 발생했습니다'
-                      })
-                  };
+                  try:
+                      response = stepfunctions.start_execution(
+                          stateMachineArn='arn:aws:states:us-east-1:491085385364:stateMachine:ai-chef-workflow',
+                          name=f'execution-{int(datetime.now().timestamp())}',
+                          input=json.dumps(workflow_input)
+                      )
+                      
+                      expression_values[':executionArn'] = response['executionArn']
+                      update_expression += ", executionArn = :executionArn"
+                  except Exception as e:
+                      logger.error(f"Step Functions 시작 실패: {e}")
+              
+              sessions_table.update_item(
+                  Key={'sessionId': session_id},
+                  UpdateExpression=update_expression,
+                  ExpressionAttributeNames={'#profile': 'profile', '#status': 'status'} if user_profile else {},
+                  ExpressionAttributeValues=expression_values
+              )
+              
+              return {
+                  'statusCode': 200,
+                  'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                  'body': json.dumps({
+                      'sessionId': session_id,
+                      'message': '세션이 성공적으로 업데이트되었습니다',
+                      'updatedAt': datetime.now().isoformat()
+                  })
               }
-          };
 
   SessionUpdateLambdaPermission:
     Type: AWS::Lambda::Permission
