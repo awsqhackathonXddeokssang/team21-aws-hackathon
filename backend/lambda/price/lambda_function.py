@@ -198,14 +198,14 @@ def get_naver_credentials():
         }
 
 def get_ingredient_prices(ingredient_name: str) -> List[Dict]:
-    """네이버 쇼핑 API로 가격 조회"""
+    """네이버 쇼핑 API로 가격 조회 - 최저가 5개 반환"""
     credentials = get_naver_credentials()
     client_id = credentials['client_id']
     client_secret = credentials['client_secret']
     
-    # 간단한 기본 검색
+    # 유사도순으로 100개 검색
     query = urllib.parse.quote(ingredient_name)
-    url = f"https://openapi.naver.com/v1/search/shop.json?query={query}&display=20&sort=asc"
+    url = f"https://openapi.naver.com/v1/search/shop.json?query={query}&display=100&sort=sim"
     
     request = urllib.request.Request(url)
     request.add_header("X-Naver-Client-Id", client_id)
@@ -236,9 +236,9 @@ def get_ingredient_prices(ingredient_name: str) -> List[Dict]:
                 'availability': 'available'
             })
         
-        # 가격순 정렬 후 상위 10개만 반환
+        # 가격순 정렬 후 최저가 5개 반환
         sorted_prices = sorted(prices, key=lambda x: x['price'])
-        return sorted_prices[:10]
+        return sorted_prices[:5] if sorted_prices else []
         
     except Exception as e:
         print(f'재료 {ingredient_name} 조회 실패: {e}')
@@ -247,7 +247,15 @@ def get_ingredient_prices(ingredient_name: str) -> List[Dict]:
 def format_pricing_result(price_results: Dict[str, List], session_id: str) -> Dict:
     """가격 결과 포맷팅"""
     found_ingredients = [k for k, v in price_results.items() if v]
-    total_cost = sum(items[0]['price'] for items in price_results.values() if items)
+    
+    # recommendations: 각 재료별 최저가 1개씩
+    recommendations = {}
+    total_cost = 0
+    for ingredient, items in price_results.items():
+        if items:
+            cheapest = items[0]  # 최저가 1개
+            recommendations[ingredient] = cheapest
+            total_cost += cheapest['price']
     
     return {
         'success': True,
@@ -257,10 +265,11 @@ def format_pricing_result(price_results: Dict[str, List], session_id: str) -> Di
                 'foundIngredients': len(found_ingredients),
                 'successRate': len(found_ingredients) / len(price_results) if price_results else 0
             },
-            'ingredients': price_results,
+            'ingredients': price_results,  # 재료별 5개씩
             'recommendations': {
+                'items': recommendations,  # 재료별 최저가 1개씩
                 'totalEstimatedCost': total_cost,
-                'optimalVendors': calculate_optimal_vendors(price_results)
+                'optimalVendors': calculate_optimal_vendors(recommendations)
             }
         },
         'metadata': {
@@ -269,16 +278,12 @@ def format_pricing_result(price_results: Dict[str, List], session_id: str) -> Di
         }
     }
 
-def calculate_optimal_vendors(price_results: Dict[str, List]) -> List[Dict]:
-    """최적 판매처 계산"""
+def calculate_optimal_vendors(recommendations: Dict[str, Dict]) -> List[Dict]:
+    """최적 판매처 계산 - recommendations 기반"""
     vendor_groups = {}
     
-    for ingredient, items in price_results.items():
-        if not items:
-            continue
-        
-        cheapest = items[0]
-        vendor = cheapest['vendor']
+    for ingredient, item in recommendations.items():
+        vendor = item['vendor']
         
         if vendor not in vendor_groups:
             vendor_groups[vendor] = {
@@ -290,9 +295,9 @@ def calculate_optimal_vendors(price_results: Dict[str, List]) -> List[Dict]:
         
         vendor_groups[vendor]['items'].append({
             'ingredient': ingredient,
-            **cheapest
+            **item
         })
-        vendor_groups[vendor]['totalPrice'] += cheapest['price']
+        vendor_groups[vendor]['totalPrice'] += item['price']
         vendor_groups[vendor]['itemCount'] += 1
     
     return sorted(vendor_groups.values(), key=lambda x: x['totalPrice'])
