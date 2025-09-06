@@ -8,7 +8,7 @@ echo "🚀 Building Python Lambda package..."
 mkdir -p build
 cd build
 
-# 의존성 설치
+# 의존성 설치 (최소한만)
 pip install -r ../requirements.txt -t .
 
 # Lambda 함수 코드 복사

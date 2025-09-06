@@ -3,36 +3,10 @@ import boto3
 import os
 import re
 from typing import Dict, List, Any, Optional
-from opensearchpy import OpenSearch, RequestsHttpConnection
-from aws_requests_auth.aws_auth import AWSRequestsAuth
 
 # AWS 클라이언트 초기화
 bedrock = boto3.client('bedrock-runtime', region_name='us-east-1')
 dynamodb = boto3.client('dynamodb', region_name='us-east-1')
-
-# OpenSearch 클라이언트 설정
-def get_opensearch_client():
-    host = os.environ.get('OPENSEARCH_ENDPOINT', 'https://search-nutrition-rag-dev-search-m327wc6eudd6uas5cm3gnbsz7y.us-east-1.es.amazonaws.com')
-    host = host.replace('https://', '').replace('http://', '')
-    
-    awsauth = AWSRequestsAuth(
-        aws_access_key=os.environ.get('AWS_ACCESS_KEY_ID'),
-        aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
-        aws_token=os.environ.get('AWS_SESSION_TOKEN'),
-        aws_host=host,
-        aws_region='us-east-1',
-        aws_service='es'
-    )
-    
-    return OpenSearch(
-        hosts=[{'host': host, 'port': 443}],
-        http_auth=awsauth,
-        use_ssl=True,
-        verify_certs=True,
-        connection_class=RequestsHttpConnection
-    )
-
-opensearch_client = get_opensearch_client()
 
 def update_session_status(session_id: str, progress: int, status: str = 'processing'):
     """세션 상태 업데이트"""
@@ -49,44 +23,6 @@ def update_session_status(session_id: str, progress: int, status: str = 'process
         )
     except Exception as error:
         print(f'Failed to update session status: {error}')
-
-def search_nutrition_data(ingredients: List[str]) -> List[Dict]:
-    """OpenSearch에서 영양 데이터 검색"""
-    try:
-        # 인덱스 존재 확인
-        if not opensearch_client.indices.exists(index='ingredient-nutrition'):
-            print('Nutrition index not found, using AI estimation')
-            return []
-
-        search_queries = [
-            {
-                "match": {
-                    "food_name": {
-                        "query": ingredient,
-                        "fuzziness": "AUTO"
-                    }
-                }
-            }
-            for ingredient in ingredients
-        ]
-
-        response = opensearch_client.search(
-            index='ingredient-nutrition',
-            body={
-                "query": {
-                    "bool": {
-                        "should": search_queries,
-                        "minimum_should_match": 1
-                    }
-                },
-                "size": 20
-            }
-        )
-
-        return [hit['_source'] for hit in response['hits']['hits']]
-    except Exception as error:
-        print(f'OpenSearch nutrition lookup failed: {error}')
-        return []
 
 def calculate_nutrition_with_ai(recipe: Dict, profile: Dict) -> Dict:
     """AI를 사용한 영양소 계산"""
@@ -305,13 +241,7 @@ def lambda_handler(event, context):
             ExpressionAttributeValues={':status': {'S': 'processing'}}
         )
 
-        # 1. OpenSearch에서 영양 데이터 검색 시도
-        nutrition_data = search_nutrition_data(recipe_obj.get('ingredients', []))
-        
-        if nutrition_data:
-            print('📊 Using database nutrition data')
-        else:
-            print('🤖 Using AI nutrition estimation')
+        print('🤖 Using AI nutrition estimation')
         
         # AI 기반 영양소 추정
         final_nutrition = calculate_nutrition_with_ai(recipe_obj, profile)
