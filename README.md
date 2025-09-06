@@ -64,7 +64,164 @@ Amazon Q Developer로 구현한 어플리케이션의 데모 영상을 입력합
 
 ## 리소스 배포하기
 
-해당 코드를 AWS 상에 배포하기 위한 방법을 설명합니다. 인프라를 배포했을 경우 출력되는 AWS 아키텍처도 함께 포함하며, 리소스를 삭제하는 방안도 함께 작성합니다.
+### 🏗️ 아키텍처 개요
+
+AI Chef는 서버리스 아키텍처를 기반으로 구축되어 높은 확장성과 비용 효율성을 제공합니다.
+
+**주요 AWS 서비스:**
+- **Frontend**: AWS Amplify (Next.js 정적 사이트 호스팅)
+- **Backend**: AWS Lambda + API Gateway (서버리스 API)
+- **Database**: DynamoDB (세션 및 결과 저장)
+- **AI**: AWS Bedrock Claude (레시피 생성)
+- **Infrastructure**: AWS SAM (CloudFormation 기반 IaC)
+
+### 📋 사전 요구사항
+
+1. **AWS CLI 설치 및 구성**
+```bash
+# AWS CLI 설치 확인
+aws --version
+
+# AWS 자격 증명 구성
+aws configure
+```
+
+2. **SAM CLI 설치**
+```bash
+# macOS
+brew install aws-sam-cli
+
+# 설치 확인
+sam --version
+```
+
+3. **Node.js 설치** (프론트엔드용)
+```bash
+node --version  # v18 이상 권장
+npm --version
+```
+
+### 🚀 백엔드 배포
+
+1. **저장소 클론**
+```bash
+git clone <repository-url>
+cd team21-aws-hackathon
+```
+
+2. **백엔드 배포 실행**
+```bash
+# 배포 스크립트 실행 권한 부여
+chmod +x deploy-core.sh
+
+# 핵심 백엔드 인프라 배포
+./deploy-core.sh
+```
+
+3. **배포 완료 확인**
+```bash
+# CloudFormation 스택 상태 확인
+aws cloudformation describe-stacks \
+    --stack-name ai-chef-backend \
+    --region us-east-1
+
+# API Gateway URL 확인
+aws cloudformation describe-stacks \
+    --stack-name ai-chef-backend \
+    --query 'Stacks[0].Outputs[?OutputKey==`ApiGatewayUrl`].OutputValue' \
+    --output text \
+    --region us-east-1
+```
+
+### 🌐 프론트엔드 배포
+
+1. **AWS Amplify 앱 생성**
+```bash
+# Amplify CLI 설치
+npm install -g @aws-amplify/cli
+
+# GitHub 저장소와 연결하여 Amplify 앱 생성
+# AWS 콘솔에서 Amplify > 새 앱 > GitHub 연결
+```
+
+2. **빌드 설정**
+- `amplify.yml` 파일이 자동으로 빌드 설정을 구성
+- Next.js 정적 사이트로 빌드되어 배포
+
+3. **환경 변수 설정**
+```bash
+# Amplify 콘솔에서 환경 변수 추가
+NEXT_PUBLIC_API_URL=<API_GATEWAY_URL>
+```
+
+### 📊 배포된 리소스
+
+**DynamoDB 테이블:**
+- `ai-chef-sessions`: 사용자 세션 정보 저장
+- `ai-chef-results`: 생성된 레시피 결과 저장
+
+**Lambda 함수:**
+- 세션 관리 API
+- 레시피 생성 처리
+- 실시간 진행 상태 업데이트
+
+**API Gateway:**
+- RESTful API 엔드포인트
+- CORS 설정으로 프론트엔드 연동
+- 프로덕션 스테이지 자동 배포
+
+### 🧪 배포 테스트
+
+```bash
+# API 엔드포인트 테스트
+curl -X POST https://<api-id>.execute-api.us-east-1.amazonaws.com/prod/sessions \
+  -H "Content-Type: application/json" \
+  -d '{"goal": "diet", "budget": 30000}'
+
+# 응답 예시
+{
+  "sessionId": "uuid-string",
+  "status": "created",
+  "timestamp": "2024-09-06T07:34:30Z"
+}
+```
+
+### 🗑️ 리소스 삭제
+
+**백엔드 리소스 삭제:**
+```bash
+# CloudFormation 스택 삭제
+aws cloudformation delete-stack \
+    --stack-name ai-chef-backend \
+    --region us-east-1
+
+# 삭제 완료 확인
+aws cloudformation describe-stacks \
+    --stack-name ai-chef-backend \
+    --region us-east-1
+```
+
+**프론트엔드 리소스 삭제:**
+```bash
+# Amplify 앱 삭제 (AWS 콘솔에서)
+# 또는 CLI로 삭제
+aws amplify delete-app --app-id <app-id> --region us-east-1
+```
+
+**주의사항:**
+- DynamoDB 테이블의 데이터는 영구 삭제됩니다
+- S3 버킷에 저장된 SAM 아티팩트는 별도로 삭제해야 할 수 있습니다
+
+### 💰 예상 비용
+
+**월 예상 비용 (1000명 사용자 기준):**
+- Lambda: $5-10
+- DynamoDB: $2-5  
+- API Gateway: $3-7
+- Amplify: $1-3
+- **총합: $11-25/월**
+
+서버리스 아키텍처로 사용량에 따른 과금이므로 초기 비용 부담이 적습니다.
 
 ## 프로젝트 기대 효과 및 예상 사용 사례
 
