@@ -1,7 +1,15 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: AI Chef API Gateway - Connect to Existing Lambda Functions
+Description: AI Chef Complete Backend - All Functions and API Gateway
 Globals:
+  Function:
+    Runtime: python3.11
+    Timeout: 30
+    MemorySize: 256
+    Environment:
+      Variables:
+        SESSIONS_TABLE_NAME: ai-chef-sessions
+        RESULTS_TABLE_NAME: ai-chef-results
   Api:
     Cors:
       AllowMethods: '''GET,POST,PUT,DELETE,OPTIONS'''
@@ -13,183 +21,385 @@ Resources:
     Properties:
       Name: ai-chef-api
       StageName: prod
-      DefinitionBody:
-        swagger: '2.0'
-        info:
-          title: AI Chef API
-        paths:
-          /sessions:
-            post:
-              x-amazon-apigateway-integration:
-                type: aws_proxy
-                httpMethod: POST
-                uri:
-                  Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:ai-chef-session-create/invocations
-              responses:
-                '200':
-                  description: Success
-                  headers:
-                    Access-Control-Allow-Origin:
-                      type: string
-            options:
-              x-amazon-apigateway-integration:
-                type: mock
-                requestTemplates:
-                  application/json: '{"statusCode": 200}'
-                responses:
-                  default:
-                    statusCode: '200'
-                    responseParameters:
-                      method.response.header.Access-Control-Allow-Headers: '''Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'''
-                      method.response.header.Access-Control-Allow-Methods: '''GET,POST,PUT,DELETE,OPTIONS'''
-                      method.response.header.Access-Control-Allow-Origin: '''*'''
-              responses:
-                '200':
-                  description: Success
-                  headers:
-                    Access-Control-Allow-Headers:
-                      type: string
-                    Access-Control-Allow-Methods:
-                      type: string
-                    Access-Control-Allow-Origin:
-                      type: string
-          /sessions/update:
-            post:
-              x-amazon-apigateway-integration:
-                type: aws_proxy
-                httpMethod: POST
-                uri:
-                  Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:ai-chef-session-update/invocations
-              responses:
-                '200':
-                  description: Success
-                  headers:
-                    Access-Control-Allow-Origin:
-                      type: string
-            options:
-              x-amazon-apigateway-integration:
-                type: mock
-                requestTemplates:
-                  application/json: '{"statusCode": 200}'
-                responses:
-                  default:
-                    statusCode: '200'
-                    responseParameters:
-                      method.response.header.Access-Control-Allow-Headers: '''Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'''
-                      method.response.header.Access-Control-Allow-Methods: '''GET,POST,PUT,DELETE,OPTIONS'''
-                      method.response.header.Access-Control-Allow-Origin: '''*'''
-              responses:
-                '200':
-                  description: Success
-                  headers:
-                    Access-Control-Allow-Headers:
-                      type: string
-                    Access-Control-Allow-Methods:
-                      type: string
-                    Access-Control-Allow-Origin:
-                      type: string
-          /sessions/{sessionId}/process:
-            post:
-              x-amazon-apigateway-integration:
-                type: aws_proxy
-                httpMethod: POST
-                uri:
-                  Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:ai-chef-process/invocations
-              responses:
-                '200':
-                  description: Success
-                  headers:
-                    Access-Control-Allow-Origin:
-                      type: string
-            options:
-              x-amazon-apigateway-integration:
-                type: mock
-                requestTemplates:
-                  application/json: '{"statusCode": 200}'
-                responses:
-                  default:
-                    statusCode: '200'
-                    responseParameters:
-                      method.response.header.Access-Control-Allow-Headers: '''Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'''
-                      method.response.header.Access-Control-Allow-Methods: '''GET,POST,PUT,DELETE,OPTIONS'''
-                      method.response.header.Access-Control-Allow-Origin: '''*'''
-              responses:
-                '200':
-                  description: Success
-                  headers:
-                    Access-Control-Allow-Headers:
-                      type: string
-                    Access-Control-Allow-Methods:
-                      type: string
-                    Access-Control-Allow-Origin:
-                      type: string
-          /results/{sessionId}:
-            get:
-              x-amazon-apigateway-integration:
-                type: aws_proxy
-                httpMethod: POST
-                uri:
-                  Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:ai-chef-result/invocations
-              responses:
-                '200':
-                  description: Success
-                  headers:
-                    Access-Control-Allow-Origin:
-                      type: string
-            options:
-              x-amazon-apigateway-integration:
-                type: mock
-                requestTemplates:
-                  application/json: '{"statusCode": 200}'
-                responses:
-                  default:
-                    statusCode: '200'
-                    responseParameters:
-                      method.response.header.Access-Control-Allow-Headers: '''Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'''
-                      method.response.header.Access-Control-Allow-Methods: '''GET,POST,PUT,DELETE,OPTIONS'''
-                      method.response.header.Access-Control-Allow-Origin: '''*'''
-              responses:
-                '200':
-                  description: Success
-                  headers:
-                    Access-Control-Allow-Headers:
-                      type: string
-                    Access-Control-Allow-Methods:
-                      type: string
-                    Access-Control-Allow-Origin:
-                      type: string
-  SessionCreatePermission:
-    Type: AWS::Lambda::Permission
+  SessionCreateFunction:
+    Type: AWS::Serverless::Function
     Properties:
-      FunctionName: ai-chef-session-create
-      Action: lambda:InvokeFunction
-      Principal: apigateway.amazonaws.com
-      SourceArn:
-        Fn::Sub: ${AiChefApi}/*/POST/sessions
-  SessionUpdatePermission:
-    Type: AWS::Lambda::Permission
+      FunctionName: ai-chef-session-create-new
+      CodeUri: SessionCreateFunction
+      Handler: index.handler
+      Policies:
+      - Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - dynamodb:PutItem
+          - dynamodb:GetItem
+          - dynamodb:UpdateItem
+          - dynamodb:DeleteItem
+          - dynamodb:Query
+          - dynamodb:Scan
+          Resource:
+          - arn:aws:dynamodb:us-east-1:*:table/ai-chef-sessions
+      Events:
+        CreateSession:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: AiChefApi
+            Path: /sessions
+            Method: post
+    Metadata:
+      SamResourceId: SessionCreateFunction
+  SessionUpdateFunction:
+    Type: AWS::Serverless::Function
     Properties:
-      FunctionName: ai-chef-session-update
-      Action: lambda:InvokeFunction
-      Principal: apigateway.amazonaws.com
-      SourceArn:
-        Fn::Sub: ${AiChefApi}/*/POST/sessions/update
-  ProcessPermission:
-    Type: AWS::Lambda::Permission
+      FunctionName: ai-chef-session-update-new
+      CodeUri: SessionUpdateFunction
+      Handler: index.handler
+      Policies:
+      - Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - dynamodb:PutItem
+          - dynamodb:GetItem
+          - dynamodb:UpdateItem
+          - dynamodb:DeleteItem
+          - dynamodb:Query
+          - dynamodb:Scan
+          Resource:
+          - arn:aws:dynamodb:us-east-1:*:table/ai-chef-sessions
+        - Effect: Allow
+          Action:
+          - bedrock:InvokeModel
+          Resource: '*'
+      Events:
+        UpdateSession:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: AiChefApi
+            Path: /sessions/update
+            Method: post
+    Metadata:
+      SamResourceId: SessionUpdateFunction
+  SessionStatusFunction:
+    Type: AWS::Serverless::Function
     Properties:
-      FunctionName: ai-chef-process
-      Action: lambda:InvokeFunction
-      Principal: apigateway.amazonaws.com
-      SourceArn:
-        Fn::Sub: ${AiChefApi}/*/POST/sessions/*/process
-  ResultPermission:
-    Type: AWS::Lambda::Permission
+      FunctionName: ai-chef-session-status-new
+      CodeUri: SessionStatusFunction
+      Handler: index.handler
+      Policies:
+      - Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - dynamodb:GetItem
+          - dynamodb:Query
+          - dynamodb:Scan
+          Resource:
+          - arn:aws:dynamodb:us-east-1:*:table/ai-chef-sessions
+      Events:
+        GetStatus:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: AiChefApi
+            Path: /sessions/{sessionId}/status
+            Method: get
+    Metadata:
+      SamResourceId: SessionStatusFunction
+  RecipeFunction:
+    Type: AWS::Serverless::Function
     Properties:
-      FunctionName: ai-chef-result
-      Action: lambda:InvokeFunction
-      Principal: apigateway.amazonaws.com
-      SourceArn:
-        Fn::Sub: ${AiChefApi}/*/GET/results/*
+      FunctionName: ai-chef-recipe-new
+      CodeUri: RecipeFunction
+      Handler: index.handler
+      Timeout: 300
+      MemorySize: 512
+      Policies:
+      - Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - dynamodb:PutItem
+          - dynamodb:GetItem
+          - dynamodb:UpdateItem
+          - dynamodb:DeleteItem
+          - dynamodb:Query
+          - dynamodb:Scan
+          Resource:
+          - arn:aws:dynamodb:us-east-1:*:table/ai-chef-sessions
+          - arn:aws:dynamodb:us-east-1:*:table/ai-chef-results
+        - Effect: Allow
+          Action:
+          - bedrock:InvokeModel
+          Resource: '*'
+    Metadata:
+      SamResourceId: RecipeFunction
+  RecipeWithRagFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ai-chef-create-recipe-with-rag-new
+      CodeUri: RecipeWithRagFunction
+      Handler: index.handler
+      Timeout: 300
+      MemorySize: 512
+      Policies:
+      - Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - dynamodb:PutItem
+          - dynamodb:GetItem
+          - dynamodb:UpdateItem
+          - dynamodb:DeleteItem
+          - dynamodb:Query
+          - dynamodb:Scan
+          Resource:
+          - arn:aws:dynamodb:us-east-1:*:table/ai-chef-sessions
+          - arn:aws:dynamodb:us-east-1:*:table/ai-chef-results
+        - Effect: Allow
+          Action:
+          - bedrock:InvokeModel
+          Resource: '*'
+    Metadata:
+      SamResourceId: RecipeWithRagFunction
+  PriceFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ai-chef-price-new
+      CodeUri: PriceFunction
+      Handler: index.handler
+      Timeout: 60
+      MemorySize: 512
+      Policies:
+      - Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - dynamodb:PutItem
+          - dynamodb:GetItem
+          - dynamodb:UpdateItem
+          - dynamodb:DeleteItem
+          - dynamodb:Query
+          - dynamodb:Scan
+          Resource:
+          - arn:aws:dynamodb:us-east-1:*:table/ai-chef-sessions
+          - arn:aws:dynamodb:us-east-1:*:table/ai-chef-results
+        - Effect: Allow
+          Action:
+          - secretsmanager:GetSecretValue
+          Resource: '*'
+    Metadata:
+      SamResourceId: PriceFunction
+  NutritionCalculatorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ai-chef-nutrition-calculator-new
+      CodeUri: NutritionCalculatorFunction
+      Handler: index.handler
+      Timeout: 60
+      MemorySize: 512
+      Policies:
+      - Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - dynamodb:PutItem
+          - dynamodb:GetItem
+          - dynamodb:UpdateItem
+          - dynamodb:DeleteItem
+          - dynamodb:Query
+          - dynamodb:Scan
+          Resource:
+          - arn:aws:dynamodb:us-east-1:*:table/ai-chef-sessions
+          - arn:aws:dynamodb:us-east-1:*:table/ai-chef-results
+    Metadata:
+      SamResourceId: NutritionCalculatorFunction
+  RecipeImageGeneratorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ai-chef-recipe-image-generator-new
+      CodeUri: RecipeImageGeneratorFunction
+      Handler: index.handler
+      Timeout: 60
+      MemorySize: 1024
+      Policies:
+      - Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - dynamodb:PutItem
+          - dynamodb:GetItem
+          - dynamodb:UpdateItem
+          - dynamodb:DeleteItem
+          - dynamodb:Query
+          - dynamodb:Scan
+          Resource:
+          - arn:aws:dynamodb:us-east-1:*:table/ai-chef-sessions
+          - arn:aws:dynamodb:us-east-1:*:table/ai-chef-results
+        - Effect: Allow
+          Action:
+          - bedrock:InvokeModel
+          Resource: '*'
+    Metadata:
+      SamResourceId: RecipeImageGeneratorFunction
+  ProcessFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ai-chef-process-new
+      CodeUri: ProcessFunction
+      Handler: index.handler
+      Timeout: 300
+      Policies:
+      - Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - dynamodb:PutItem
+          - dynamodb:GetItem
+          - dynamodb:UpdateItem
+          - dynamodb:DeleteItem
+          - dynamodb:Query
+          - dynamodb:Scan
+          Resource:
+          - arn:aws:dynamodb:us-east-1:*:table/ai-chef-sessions
+        - Effect: Allow
+          Action:
+          - states:StartExecution
+          Resource:
+            Ref: AiChefWorkflow
+      Events:
+        ProcessSession:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: AiChefApi
+            Path: /sessions/{sessionId}/process
+            Method: post
+    Metadata:
+      SamResourceId: ProcessFunction
+  CombineFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ai-chef-combine-new
+      CodeUri: CombineFunction
+      Handler: index.handler
+      Timeout: 60
+      Policies:
+      - Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - dynamodb:PutItem
+          - dynamodb:GetItem
+          - dynamodb:UpdateItem
+          - dynamodb:DeleteItem
+          - dynamodb:Query
+          - dynamodb:Scan
+          Resource:
+          - arn:aws:dynamodb:us-east-1:*:table/ai-chef-sessions
+          - arn:aws:dynamodb:us-east-1:*:table/ai-chef-results
+    Metadata:
+      SamResourceId: CombineFunction
+  ResultFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ai-chef-result-new
+      CodeUri: ResultFunction
+      Handler: index.handler
+      Policies:
+      - Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - dynamodb:GetItem
+          - dynamodb:Query
+          - dynamodb:Scan
+          Resource:
+          - arn:aws:dynamodb:us-east-1:*:table/ai-chef-results
+      Events:
+        GetResult:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: AiChefApi
+            Path: /results/{sessionId}
+            Method: get
+    Metadata:
+      SamResourceId: ResultFunction
+  AiChefWorkflow:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Name: ai-chef-workflow-new
+      Definition:
+        Comment: AI Chef Recipe Generation Workflow
+        StartAt: ParallelProcessing
+        States:
+          ParallelProcessing:
+            Type: Parallel
+            Branches:
+            - StartAt: GenerateRecipe
+              States:
+                GenerateRecipe:
+                  Type: Task
+                  Resource:
+                    Fn::GetAtt:
+                    - RecipeFunction
+                    - Arn
+                  End: true
+            - StartAt: GetPriceInfo
+              States:
+                GetPriceInfo:
+                  Type: Task
+                  Resource:
+                    Fn::GetAtt:
+                    - PriceFunction
+                    - Arn
+                  End: true
+            - StartAt: CalculateNutrition
+              States:
+                CalculateNutrition:
+                  Type: Task
+                  Resource:
+                    Fn::GetAtt:
+                    - NutritionCalculatorFunction
+                    - Arn
+                  End: true
+            - StartAt: GenerateImage
+              States:
+                GenerateImage:
+                  Type: Task
+                  Resource:
+                    Fn::GetAtt:
+                    - RecipeImageGeneratorFunction
+                    - Arn
+                  End: true
+            Next: CombineResults
+          CombineResults:
+            Type: Task
+            Resource:
+              Fn::GetAtt:
+              - CombineFunction
+              - Arn
+            End: true
+      Policies:
+      - LambdaInvokePolicy:
+          FunctionName:
+            Ref: RecipeFunction
+      - LambdaInvokePolicy:
+          FunctionName:
+            Ref: PriceFunction
+      - LambdaInvokePolicy:
+          FunctionName:
+            Ref: NutritionCalculatorFunction
+      - LambdaInvokePolicy:
+          FunctionName:
+            Ref: RecipeImageGeneratorFunction
+      - LambdaInvokePolicy:
+          FunctionName:
+            Ref: CombineFunction
 Outputs:
   ApiGatewayUrl:
     Description: API Gateway endpoint URL
@@ -198,3 +408,15 @@ Outputs:
     Export:
       Name:
         Fn::Sub: ${AWS::StackName}-ApiUrl
+  SessionsTableName:
+    Description: DynamoDB Sessions Table Name
+    Value: ai-chef-sessions
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-SessionsTable
+  ResultsTableName:
+    Description: DynamoDB Results Table Name
+    Value: ai-chef-results
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-ResultsTable
