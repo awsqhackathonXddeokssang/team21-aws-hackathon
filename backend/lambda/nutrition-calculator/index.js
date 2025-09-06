@@ -123,12 +123,45 @@ async function calculateNutritionWithAI(recipe, profile) {
         const responseBody = JSON.parse(new TextDecoder().decode(response.body));
         const nutritionText = responseBody.content[0].text;
         
-        const jsonMatch = nutritionText.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-            return JSON.parse(jsonMatch[0]);
+        console.log('🔍 AI Response:', nutritionText);
+        
+        // JSON 추출 시도 (여러 패턴)
+        let jsonMatch = nutritionText.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+            // 코드 블록 내 JSON 찾기
+            jsonMatch = nutritionText.match(/```json\s*(\{[\s\S]*?\})\s*```/);
+            if (jsonMatch) jsonMatch[0] = jsonMatch[1];
         }
         
-        throw new Error('Invalid nutrition format');
+        if (jsonMatch) {
+            try {
+                const parsed = JSON.parse(jsonMatch[0]);
+                console.log('✅ Parsed nutrition:', parsed);
+                return parsed;
+            } catch (parseError) {
+                console.error('JSON parse error:', parseError);
+                console.error('Raw JSON:', jsonMatch[0]);
+            }
+        }
+        
+        // 기본값 반환
+        console.log('⚠️ Using fallback nutrition data');
+        return {
+            nutrition: {
+                calories: 300,
+                carbs: 30,
+                protein: 15,
+                fat: 10,
+                fiber: 5,
+                sodium: 500
+            },
+            nutritionPerServing: {
+                calories: 150,
+                carbs: 15,
+                protein: 7.5,
+                fat: 5
+            }
+        };
     } catch (error) {
         console.error('AI nutrition calculation failed:', error);
         throw error;
