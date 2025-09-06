@@ -196,9 +196,10 @@ exports.handler = async (event) => {
 
     try {
         const requestBody = typeof event.body === 'string' ? JSON.parse(event.body) : event;
-        const { sessionId, recipe: recipeData, profile } = requestBody;
+        const { sessionId, recipe: recipeData, recipeData: altRecipeData, profile } = requestBody;
+        const recipe = recipeData || altRecipeData;
 
-        if (!sessionId || !recipeData) {
+        if (!sessionId || !recipe) {
             return {
                 statusCode: 400,
                 headers,
@@ -207,15 +208,15 @@ exports.handler = async (event) => {
         }
 
         // JSON 문자열 파싱 (다른 Lambda와 동일한 로직)
-        let recipe;
-        if (typeof recipeData === 'string') {
-            const parsed = JSON.parse(recipeData);
-            recipe = parsed.recipe || parsed;
+        let recipeObj;
+        if (typeof recipe === 'string') {
+            const parsed = JSON.parse(recipe);
+            recipeObj = parsed.recipe || parsed;
         } else {
-            recipe = recipeData.recipe || recipeData;
+            recipeObj = recipe.recipe || recipe;
         }
 
-        console.log('🧮 Starting nutrition calculation for:', recipe.recipeName);
+        console.log('🧮 Starting nutrition calculation for:', recipeObj.recipeName);
         
         // 세션 상태 업데이트 (85% 진행률)
         await updateSessionStatus(sessionId, 85);
