@@ -21,7 +21,12 @@ Resources:
               - Effect: Allow
                 Action:
                   - lambda:InvokeFunction
-                Resource: '*'
+                Resource:
+                  - 'arn:aws:lambda:*:*:function:ai-chef-recipe'
+                  - 'arn:aws:lambda:*:*:function:ai-chef-nutrition-calculator'
+                  - 'arn:aws:lambda:*:*:function:ai-chef-price'
+                  - 'arn:aws:lambda:*:*:function:ai-chef-recipe-image-generator'
+                  - 'arn:aws:lambda:*:*:function:ai-chef-combine'
 
   # Step Functions State Machine
   RecipeWorkflowStateMachine:
@@ -31,14 +36,14 @@ Resources:
       RoleArn: !GetAtt StepFunctionsRole.Arn
       DefinitionString: |
         {
-          "Comment": "AI Chef Workflow with Parallel Processing",
+          "Comment": "AI Chef Workflow - Recipe RAG then Parallel Processing",
           "StartAt": "CreateRecipeWithRAG",
           "States": {
             "CreateRecipeWithRAG": {
               "Type": "Task",
               "Resource": "arn:aws:states:::lambda:invoke",
               "Parameters": {
-                "FunctionName": "create-recipe-with-rag",
+                "FunctionName": "ai-chef-recipe",
                 "Payload.$": "$"
               },
               "ResultSelector": {
@@ -51,6 +56,23 @@ Resources:
               "Type": "Parallel",
               "Branches": [
                 {
+                  "StartAt": "NutritionCalculator",
+                  "States": {
+                    "NutritionCalculator": {
+                      "Type": "Task",
+                      "Resource": "arn:aws:states:::lambda:invoke",
+                      "Parameters": {
+                        "FunctionName": "ai-chef-nutrition-calculator",
+                        "Payload": {
+                          "sessionId.$": "$.sessionId",
+                          "recipe.$": "$.recipeResult.recipe"
+                        }
+                      },
+                      "End": true
+                    }
+                  }
+                },
+                {
                   "StartAt": "FetchPrices",
                   "States": {
                     "FetchPrices": {
@@ -61,52 +83,25 @@ Resources:
                         "Payload": {
                           "sessionId.$": "$.sessionId",
                           "profile.$": "$.profile",
-                          "recipeResult.$": "$.recipeResult"
+                          "ingredients.$": "$.recipeResult.recipe.ingredients"
                         }
-                      },
-                      "ResultSelector": {
-                        "pricing.$": "$.Payload.body"
                       },
                       "End": true
                     }
                   }
                 },
                 {
-                  "StartAt": "CalculateNutrition",
+                  "StartAt": "GenerateImage",
                   "States": {
-                    "CalculateNutrition": {
+                    "GenerateImage": {
                       "Type": "Task",
                       "Resource": "arn:aws:states:::lambda:invoke",
                       "Parameters": {
-                        "FunctionName": "ai-chef-nutrition-calculator",
-                        "Payload": {
-                          "sessionId.$": "$.sessionId",
-                          "profile.$": "$.profile",
-                          "recipeData.$": "$.recipeResult.recipe"
-                        }
-                      },
-                      "ResultSelector": {
-                        "nutrition.$": "$.Payload"
-                      },
-                      "End": true
-                    }
-                  }
-                },
-                {
-                  "StartAt": "GenerateRecipeImage",
-                  "States": {
-                    "GenerateRecipeImage": {
-                      "Type": "Task",
-                      "Resource": "arn:aws:states:::lambda:invoke",
-                      "Parameters": {
-                        "FunctionName": "recipe-image-generator",
+                        "FunctionName": "ai-chef-recipe-image-generator",
                         "Payload": {
                           "sessionId.$": "$.sessionId",
                           "recipe.$": "$.recipeResult.recipe"
                         }
-                      },
-                      "ResultSelector": {
-                        "image.$": "$.Payload.body"
                       },
                       "End": true
                     }
@@ -125,9 +120,9 @@ Resources:
                   "sessionId.$": "$.sessionId",
                   "profile.$": "$.profile",
                   "recipeResult.$": "$.recipeResult.recipe",
-                  "pricingResult.$": "$.parallelResults[0].pricing",
-                  "nutritionResult.$": "$.parallelResults[1].nutrition",
-                  "imageResult.$": "$.parallelResults[2].image"
+                  "nutritionResult.$": "$.parallelResults[0].Payload.body",
+                  "pricingResult.$": "$.parallelResults[1].Payload.body",
+                  "imageResult.$": "$.parallelResults[2].Payload.body"
                 }
               },
               "End": true
