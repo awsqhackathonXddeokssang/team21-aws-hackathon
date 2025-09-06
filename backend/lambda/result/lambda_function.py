@@ -184,8 +184,23 @@ def calculate_processing_time(session: Dict[str, Any]) -> Optional[int]:
     """처리 시간 계산 (초)"""
     try:
         if 'createdAt' in session and 'updatedAt' in session:
-            start = datetime.fromisoformat(session['createdAt'].replace('Z', '+00:00'))
-            end = datetime.fromisoformat(session['updatedAt'].replace('Z', '+00:00'))
+            created_at = session['createdAt']
+            updated_at = session['updatedAt']
+            
+            # Z를 +00:00으로 변환하여 timezone 정보 통일
+            if created_at.endswith('Z'):
+                created_at = created_at.replace('Z', '+00:00')
+            if updated_at.endswith('Z'):
+                updated_at = updated_at.replace('Z', '+00:00')
+                
+            # timezone 정보가 없는 경우 UTC로 가정
+            if '+' not in created_at and 'Z' not in created_at:
+                created_at += '+00:00'
+            if '+' not in updated_at and 'Z' not in updated_at:
+                updated_at += '+00:00'
+            
+            start = datetime.fromisoformat(created_at)
+            end = datetime.fromisoformat(updated_at)
             return int((end - start).total_seconds())
     except Exception as e:
         logger.error(f"Processing time calculation error: {e}")
