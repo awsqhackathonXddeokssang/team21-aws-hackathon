@@ -334,11 +334,26 @@ def update_session_status(session_id: str, status: str, phase: str, progress: in
     except Exception as e:
         logger.error(f"세션 상태 업데이트 실패: {e}")
 
+from decimal import Decimal
+
+def convert_floats_to_decimal(obj):
+    """Float를 Decimal로 변환 (DynamoDB 호환)"""
+    if isinstance(obj, float):
+        return Decimal(str(obj))
+    elif isinstance(obj, dict):
+        return {k: convert_floats_to_decimal(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_floats_to_decimal(v) for v in obj]
+    return obj
+
 def save_final_result(session_id: str, result: Dict):
     """최종 결과 저장 - Recipe Lambda 스타일"""
     try:
         logger.info(f"최종 결과 저장 시작: {session_id}")
         logger.info(f"저장할 결과 크기: {len(str(result))}")
+        
+        # Float를 Decimal로 변환
+        converted_data = convert_floats_to_decimal(result['data'])
         
         sessions_table.update_item(
             Key={'sessionId': session_id},
@@ -348,7 +363,7 @@ def save_final_result(session_id: str, result: Dict):
                 '#completedAt': 'completedAt'
             },
             ExpressionAttributeValues={
-                ':result': result['data'],
+                ':result': converted_data,  # ← Decimal로 변환된 데이터
                 ':completedAt': datetime.now().isoformat()
             }
         )
