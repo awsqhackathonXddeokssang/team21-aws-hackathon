@@ -30,8 +30,8 @@ Resources:
     UpdateReplacePolicy: Delete
     Properties:
       FunctionName: 'ai-chef-session-create'
-      Runtime: nodejs14.x
-      Handler: index.handler
+      Runtime: python3.11
+      Handler: index.lambda_handler
       Role: !GetAtt SessionCreateLambdaRole.Arn
       Timeout: 30
       MemorySize: 256
@@ -40,79 +40,75 @@ Resources:
           SESSIONS_TABLE_NAME: 'ai-chef-sessions'
       Code:
         ZipFile: |
-          const AWS = require('aws-sdk');
-          const { v4: uuidv4 } = require('uuid');
+          import json
+          import boto3
+          import uuid
+          from datetime import datetime, timedelta
+          import os
 
-          const dynamodb = new AWS.DynamoDB.DocumentClient();
-          const TABLE_NAME = process.env.SESSIONS_TABLE_NAME;
+          dynamodb = boto3.resource('dynamodb')
+          table = dynamodb.Table(os.environ['SESSIONS_TABLE_NAME'])
 
-          exports.handler = async (event) => {
-            console.log('세션 생성 요청:', JSON.stringify(event, null, 2));
-
-            // CORS preflight 처리
-            if (event.httpMethod === 'OPTIONS') {
-              return {
-                statusCode: 200,
-                headers: {
-                  'Access-Control-Allow-Origin': '*',
-                  'Access-Control-Allow-Headers': 'Content-Type',
-                  'Access-Control-Allow-Methods': 'POST, OPTIONS'
-                },
-                body: ''
-              };
-            }
-
-            try {
-              const sessionId = `sess_${uuidv4()}`;
-              const now = new Date();
-              const expiresAt = new Date(now.getTime() + 2 * 60 * 60 * 1000); // 2시간 후
+          def lambda_handler(event, context):
+              print(f'세션 생성 요청: {json.dumps(event)}')
               
-              const sessionRecord = {
-                sessionId,
-                status: 'idle',
-                createdAt: now.toISOString(),
-                expiresAt: expiresAt.toISOString(),
-                lastActivity: now.toISOString(),
-                ttl: Math.floor(expiresAt.getTime() / 1000), // DynamoDB TTL
-                retryCount: 0,
-                maxRetries: 3
-              };
-
-              await dynamodb.put({
-                TableName: TABLE_NAME,
-                Item: sessionRecord
-              }).promise();
-
-              console.log('세션 생성 완료:', sessionId);
-
-              return {
-                statusCode: 200,
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Access-Control-Allow-Origin': '*'
-                },
-                body: JSON.stringify({
-                  sessionId: sessionRecord.sessionId,
-                  createdAt: sessionRecord.createdAt,
-                  expiresAt: sessionRecord.expiresAt
-                })
-              };
-
-            } catch (error) {
-              console.error('세션 생성 실패:', error);
+              if event.get('httpMethod') == 'OPTIONS':
+                  return {
+                      'statusCode': 200,
+                      'headers': {
+                          'Access-Control-Allow-Origin': '*',
+                          'Access-Control-Allow-Headers': 'Content-Type',
+                          'Access-Control-Allow-Methods': 'POST, OPTIONS'
+                      },
+                      'body': ''
+                  }
               
-              return {
-                statusCode: 500,
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Access-Control-Allow-Origin': '*'
-                },
-                body: JSON.stringify({
-                  error: '세션 생성 중 오류가 발생했습니다'
-                })
-              };
-            }
-          };
+              try:
+                  session_id = f"sess_{str(uuid.uuid4())}"
+                  now = datetime.utcnow()
+                  expires_at = now + timedelta(hours=2)
+                  
+                  session_record = {
+                      'sessionId': session_id,
+                      'status': 'idle',
+                      'createdAt': now.isoformat() + 'Z',
+                      'expiresAt': expires_at.isoformat() + 'Z',
+                      'lastActivity': now.isoformat() + 'Z',
+                      'ttl': int(expires_at.timestamp()),
+                      'retryCount': 0,
+                      'maxRetries': 3
+                  }
+                  
+                  table.put_item(Item=session_record)
+                  
+                  print(f'세션 생성 완료: {session_id}')
+                  
+                  return {
+                      'statusCode': 200,
+                      'headers': {
+                          'Content-Type': 'application/json',
+                          'Access-Control-Allow-Origin': '*'
+                      },
+                      'body': json.dumps({
+                          'sessionId': session_record['sessionId'],
+                          'createdAt': session_record['createdAt'],
+                          'expiresAt': session_record['expiresAt']
+                      })
+                  }
+                  
+              except Exception as error:
+                  print(f'세션 생성 실패: {str(error)}')
+                  
+                  return {
+                      'statusCode': 500,
+                      'headers': {
+                          'Content-Type': 'application/json',
+                          'Access-Control-Allow-Origin': '*'
+                      },
+                      'body': json.dumps({
+                          'error': '세션 생성 중 오류가 발생했습니다'
+                      })
+                  }
 
   SessionCreateLambdaPermission:
     Type: AWS::Lambda::Permission
