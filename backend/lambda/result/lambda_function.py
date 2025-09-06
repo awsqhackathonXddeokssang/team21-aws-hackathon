@@ -97,7 +97,11 @@ def get_final_result(session_id: str) -> Optional[Dict[str, Any]]:
             elif item_type == 'price':
                 result['price'] = item.get('data', {})
             elif item_type == 'image':
-                result['image'] = item.get('data', {})
+                result['image'] = {
+                    'imageUrl': item.get('imageUrl'),
+                    'status': item.get('status'),
+                    'createdAt': item.get('createdAt')
+                }
                 
         return result if result else None
     except Exception as e:
