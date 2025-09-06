@@ -43,6 +43,13 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
         # Update session status to recipe completed
         update_session_status(session_id, 'processing', 'recipe_completed', 50)
         
+        # Update recipe status to completed
+        sessions_table.update_item(
+            Key={'sessionId': session_id},
+            UpdateExpression='SET recipeStatus = :status',
+            ExpressionAttributeValues={':status': 'completed'}
+        )
+        
         # Results 테이블에 레시피 데이터 저장
         result_data = {
             'recipe': recipe,
