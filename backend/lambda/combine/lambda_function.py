@@ -357,18 +357,24 @@ def save_final_result(session_id: str, result: Dict):
         
         sessions_table.update_item(
             Key={'sessionId': session_id},
-            UpdateExpression="SET #finalResult = :result, #completedAt = :completedAt",
+            UpdateExpression="SET #finalResult = :result, #completedAt = :completedAt, #status = :status, #progress = :progress, #phase = :phase",
             ExpressionAttributeNames={
                 '#finalResult': 'finalResult',
-                '#completedAt': 'completedAt'
+                '#completedAt': 'completedAt',
+                '#status': 'status',
+                '#progress': 'progress',
+                '#phase': 'phase'
             },
             ExpressionAttributeValues={
                 ':result': converted_data,  # ← Decimal로 변환된 데이터
-                ':completedAt': datetime.now().isoformat()
+                ':completedAt': datetime.now().isoformat(),
+                ':status': 'completed',
+                ':progress': 100,
+                ':phase': 'all_completed'
             }
         )
         
-        logger.info("최종 결과 저장 완료")
+        logger.info("최종 결과 저장 및 세션 완료 처리 완료")
         
     except Exception as e:
         logger.error(f"최종 결과 저장 실패: {e}")
