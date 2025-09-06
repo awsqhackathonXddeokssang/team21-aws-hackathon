@@ -58,6 +58,8 @@ Amazon Q Developer Hackathon으로 구현하고자 하는 아이디어를 설명
 Amazon Q Developer로 구현한 어플리케이션의 데모 영상을 입력합니다.
 **Git의 Readme에는 GIF 형식으로 업로드하며, 원본 동영상은 발표 Presentation에 제출합니다.**
 
+![img_7.png](img_7.png)
+
 ## 리소스 배포하기
 
 해당 코드를 AWS 상에 배포하기 위한 방법을 설명합니다. 인프라를 배포했을 경우 출력되는 AWS 아키텍처도 함께 포함하며, 리소스를 삭제하는 방안도 함께 작성합니다.
