@@ -1,0 +1,261 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Description: AI Chef Backend Infrastructure - Using Existing DynamoDB Tables
+
+Globals:
+  Function:
+    Runtime: python3.11
+    Timeout: 30
+    MemorySize: 256
+    Environment:
+      Variables:
+        SESSIONS_TABLE_NAME: ai-chef-sessions
+        RESULTS_TABLE_NAME: ai-chef-results
+  Api:
+    Cors:
+      AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+      AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+      AllowOrigin: "'*'"
+
+Resources:
+  # API Gateway
+  AiChefApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: ai-chef-api
+      StageName: prod
+
+  # Core Lambda Functions
+  SessionCreateFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ai-chef-session-create
+      CodeUri: backend/lambda/session-create/
+      Handler: index.handler
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:PutItem
+                - dynamodb:GetItem
+                - dynamodb:UpdateItem
+                - dynamodb:DeleteItem
+                - dynamodb:Query
+                - dynamodb:Scan
+              Resource: 
+                - arn:aws:dynamodb:us-east-1:*:table/ai-chef-sessions
+      Events:
+        CreateSession:
+          Type: Api
+          Properties:
+            RestApiId: !Ref AiChefApi
+            Path: /sessions
+            Method: post
+
+  SessionUpdateFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ai-chef-session-update
+      CodeUri: backend/lambda/session-update-profile/
+      Handler: index.handler
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:PutItem
+                - dynamodb:GetItem
+                - dynamodb:UpdateItem
+                - dynamodb:DeleteItem
+                - dynamodb:Query
+                - dynamodb:Scan
+              Resource: 
+                - arn:aws:dynamodb:us-east-1:*:table/ai-chef-sessions
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+              Resource: '*'
+      Events:
+        UpdateSession:
+          Type: Api
+          Properties:
+            RestApiId: !Ref AiChefApi
+            Path: /sessions/update
+            Method: post
+
+  RecipeFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ai-chef-recipe
+      CodeUri: backend/lambda/recipe/
+      Handler: index.handler
+      Timeout: 300
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:PutItem
+                - dynamodb:GetItem
+                - dynamodb:UpdateItem
+                - dynamodb:DeleteItem
+                - dynamodb:Query
+                - dynamodb:Scan
+              Resource: 
+                - arn:aws:dynamodb:us-east-1:*:table/ai-chef-sessions
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+              Resource: '*'
+
+  PriceFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ai-chef-price
+      CodeUri: backend/lambda/price/
+      Handler: index.handler
+      Timeout: 60
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:PutItem
+                - dynamodb:GetItem
+                - dynamodb:UpdateItem
+                - dynamodb:DeleteItem
+                - dynamodb:Query
+                - dynamodb:Scan
+              Resource: 
+                - arn:aws:dynamodb:us-east-1:*:table/ai-chef-sessions
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: '*'
+
+  CombineFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ai-chef-combine
+      CodeUri: backend/lambda/combine/
+      Handler: index.handler
+      Timeout: 60
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:PutItem
+                - dynamodb:GetItem
+                - dynamodb:UpdateItem
+                - dynamodb:DeleteItem
+                - dynamodb:Query
+                - dynamodb:Scan
+              Resource: 
+                - arn:aws:dynamodb:us-east-1:*:table/ai-chef-sessions
+                - arn:aws:dynamodb:us-east-1:*:table/ai-chef-results
+
+  ResultFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ai-chef-result
+      CodeUri: backend/lambda/result/
+      Handler: index.handler
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:PutItem
+                - dynamodb:GetItem
+                - dynamodb:UpdateItem
+                - dynamodb:DeleteItem
+                - dynamodb:Query
+                - dynamodb:Scan
+              Resource: 
+                - arn:aws:dynamodb:us-east-1:*:table/ai-chef-results
+      Events:
+        GetResult:
+          Type: Api
+          Properties:
+            RestApiId: !Ref AiChefApi
+            Path: /results/{sessionId}
+            Method: get
+
+  ProcessFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ai-chef-process
+      CodeUri: backend/lambda/process/
+      Handler: index.handler
+      Timeout: 300
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:PutItem
+                - dynamodb:GetItem
+                - dynamodb:UpdateItem
+                - dynamodb:DeleteItem
+                - dynamodb:Query
+                - dynamodb:Scan
+              Resource: 
+                - arn:aws:dynamodb:us-east-1:*:table/ai-chef-sessions
+            - Effect: Allow
+              Action:
+                - states:StartExecution
+              Resource: !Ref AiChefWorkflow
+      Events:
+        ProcessSession:
+          Type: Api
+          Properties:
+            RestApiId: !Ref AiChefApi
+            Path: /sessions/{sessionId}/process
+            Method: post
+
+  # Step Functions
+  AiChefWorkflow:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Name: ai-chef-workflow
+      Definition:
+        Comment: AI Chef Recipe Generation Workflow
+        StartAt: ParallelProcessing
+        States:
+          ParallelProcessing:
+            Type: Parallel
+            Branches:
+              - StartAt: GenerateRecipe
+                States:
+                  GenerateRecipe:
+                    Type: Task
+                    Resource: !GetAtt RecipeFunction.Arn
+                    End: true
+              - StartAt: GetPriceInfo
+                States:
+                  GetPriceInfo:
+                    Type: Task
+                    Resource: !GetAtt PriceFunction.Arn
+                    End: true
+            Next: CombineResults
+          CombineResults:
+            Type: Task
+            Resource: !GetAtt CombineFunction.Arn
+            End: true
+      Policies:
+        - LambdaInvokePolicy:
+            FunctionName: !Ref RecipeFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref PriceFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref CombineFunction
+
+Outputs:
+  ApiGatewayUrl:
+    Description: API Gateway endpoint URL
+    Value: !Sub "https://${AiChefApi}.execute-api.${AWS::Region}.amazonaws.com/prod"
+    Export:
+      Name: !Sub "${AWS::StackName}-ApiUrl"
