@@ -135,6 +135,34 @@ def create_success_response(result: Dict[str, Any], session: Dict[str, Any]) -> 
         }, default=decimal_default)
     }
 
+def create_progress_with_partial_result(session: Dict[str, Any], partial_result: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """부분 결과를 포함한 진행 상태 응답 생성"""
+    response_body = {
+        'success': True,
+        'status': 'processing',
+        'sessionId': session['sessionId'],
+        'progress': {
+            'percentage': session.get('progress', 0),
+            'phase': session.get('phase', 'unknown'),
+            'message': get_phase_message(session.get('phase', 'unknown'))
+        },
+        'startedAt': session.get('createdAt'),
+        'updatedAt': session.get('updatedAt')
+    }
+    
+    # 부분 결과가 있으면 포함
+    if partial_result:
+        response_body['result'] = partial_result
+    
+    return {
+        'statusCode': 200,
+        'headers': {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*'
+        },
+        'body': json.dumps(response_body, default=decimal_default)
+    }
+
 def create_progress_response(session: Dict[str, Any]) -> Dict[str, Any]:
     """진행 상태 응답 생성"""
     return {
