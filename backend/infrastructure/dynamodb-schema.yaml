@@ -2,6 +2,31 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: 'AI Chef DynamoDB Tables Schema'
 
 Resources:
+  # CloudWatch Log Group for DynamoDB
+  DynamoDBLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: '/aws/dynamodb/ai-chef-tables'
+      RetentionInDays: 7
+
+  # CloudWatch Alarm for Sessions Table Errors
+  SessionsTableErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: 'AI-Chef-DynamoDB-SessionsTable-Errors'
+      AlarmDescription: 'Error monitoring for Sessions DynamoDB Table'
+      MetricName: 'ThrottledRequests'
+      Namespace: 'AWS/DynamoDB'
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: TableName
+          Value: !Ref AiChefSessionsTable
+      TreatMissingData: notBreaching
+
   AiChefSessionsTable:
     Type: AWS::DynamoDB::Table
     Properties:
