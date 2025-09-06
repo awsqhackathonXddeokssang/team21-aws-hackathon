@@ -68,13 +68,7 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
         # Update session status to failed
         update_session_status(session_id, 'failed', 'recipe_generation_failed', 0, str(e))
         
-        return {
-            'statusCode': 500,
-            'body': {
-                'error': str(e),
-                'recipe': get_default_recipe(profile.get('target', 'general'))
-            }
-        }
+        raise e
 
 def save_to_results_table(session_id: str, result_data: Dict, profile: Dict):
     """Results 테이블에 레시피 데이터 저장"""
@@ -188,7 +182,7 @@ def generate_recipe_with_bedrock(profile: Dict[str, Any]) -> Dict[str, Any]:
         
     except Exception as e:
         logger.error(f'Bedrock API error: {str(e)}')
-        return get_default_recipe(target)
+        raise e
 
 def build_target_specific_prompt(profile: Dict[str, Any]) -> str:
     """Build target-specific prompts for different diet types"""
@@ -283,10 +277,7 @@ def get_nutrition_info(ingredients: List[Dict[str, Any]]) -> List[Dict[str, Any]
             
         except Exception as e:
             logger.warning(f"Failed to get nutrition for {ingredient['name']}: {e}")
-            nutrition_data.append({
-                'ingredient': ingredient['name'],
-                'nutrition': get_default_nutrition()
-            })
+            raise e
     
     return nutrition_data
 
@@ -299,9 +290,10 @@ def search_nutrition_database(ingredient_name: str) -> Dict[str, float]:
         '브로콜리': {'calories': 34, 'protein': 2.8, 'fat': 0.4, 'carbs': 7, 'fiber': 2.6}
     }
     
-    return nutrition_db.get(ingredient_name, {
-        'calories': 50, 'protein': 2, 'fat': 1, 'carbs': 10, 'fiber': 1
-    })
+    if ingredient_name not in nutrition_db:
+        raise ValueError(f"Nutrition data not found for ingredient: {ingredient_name}")
+    
+    return nutrition_db[ingredient_name]
 
 def calculate_nutrition_by_amount(nutrition: Dict[str, float], amount: float, unit: str) -> Dict[str, float]:
     """Calculate nutrition based on amount and unit"""
@@ -356,29 +348,11 @@ def extract_json_from_text(text: str) -> Dict[str, Any]:
             
     except Exception as e:
         logger.error(f"Failed to parse JSON: {e}")
-        return get_default_recipe('general')
+        raise e
 
 def clean_ingredient_name(name: str) -> str:
     """Clean ingredient name for database search"""
     cleaned = re.sub(r'[0-9]+[가-힣]*\s*', '', name)
     return cleaned.strip()
 
-def get_default_nutrition() -> Dict[str, float]:
-    """Get default nutrition values"""
-    return {'calories': 50, 'protein': 2, 'fat': 1, 'carbs': 10, 'fiber': 1}
 
-def get_default_recipe(target: str) -> Dict[str, Any]:
-    """Get default recipe for fallback"""
-    return {
-        'recipeName': f'기본 {target} 레시피',
-        'description': '기본 레시피입니다',
-        'cookingTime': 20,
-        'difficulty': 'easy',
-        'servings': 2,
-        'ingredients': [{'name': '기본 재료', 'amount': '1', 'unit': '개'}],
-        'instructions': ['1. 기본 조리법'],
-        'nutrition': {
-            'total': {'calories': 300, 'protein': 20, 'fat': 10, 'carbs': 25, 'fiber': 5},
-            'perServing': {'calories': 150, 'protein': 10, 'fat': 5, 'carbs': 12.5, 'fiber': 2.5}
-        }
-    }
