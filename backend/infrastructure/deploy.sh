@@ -43,7 +43,7 @@ aws cloudformation deploy \
 # Deploy Result Lambda
 echo "📊 Deploying Result Lambda..."
 aws cloudformation deploy \
-  --template-file result-lambda.yaml \
+  --template-file result-api.yaml \
   --stack-name ai-chef-result-lambda \
   --capabilities CAPABILITY_IAM \
   --region ${REGION}
