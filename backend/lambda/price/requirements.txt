@@ -1,2 +1,4 @@
-boto3>=1.26.0
-typing-extensions>=4.0.0
+# 모든 의존성이 Python 표준 라이브러리 또는 Lambda 기본 제공
+# boto3 - Lambda 기본 포함
+# typing - Python 표준 라이브러리
+# 외부 의존성 없음

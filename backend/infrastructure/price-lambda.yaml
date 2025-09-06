@@ -65,11 +65,8 @@ Resources:
           NAVER_API_SECRET_NAME: !Ref NaverApiSecrets
           SESSIONS_TABLE_NAME: 'ai-chef-sessions'
       Code:
-        ZipFile: |
-          # Placeholder - will be replaced by deployment script with actual ZIP file
-          import json
-          def lambda_handler(event, context):
-              return {'statusCode': 200, 'body': {'message': 'Placeholder function'}}
+        S3Bucket: !Sub 'ai-chef-lambda-code-${AWS::AccountId}'
+        S3Key: 'price/lambda-package.zip'
 
 Outputs:
   PriceLambdaArn:

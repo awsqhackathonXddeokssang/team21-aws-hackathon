@@ -1,8 +1,7 @@
-# TEMPORARILY DISABLED - Use deploy-session-create-only.yml instead
-# name: Deploy Backend Infrastructure
+name: Deploy Backend Infrastructure
 
-# on:
-#   push:
+on:
+  push:
 
 jobs:
   deploy:
