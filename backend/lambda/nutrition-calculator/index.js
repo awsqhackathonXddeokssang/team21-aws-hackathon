@@ -74,8 +74,15 @@ async function searchNutritionData(ingredients) {
 
 async function calculateNutritionWithAI(recipe, profile) {
     const ingredients = recipe?.ingredients || [];
-    const ingredientsList = Array.isArray(ingredients) 
-        ? ingredients.map(ing => typeof ing === 'string' ? ing : ing.name || ing).join(', ')
+    
+    // 안전장치: ingredients 배열 확인
+    if (!Array.isArray(ingredients)) {
+        console.error('❌ Invalid ingredients format:', ingredients);
+        throw new Error('Invalid ingredients format');
+    }
+    
+    const ingredientsList = ingredients.length > 0
+        ? ingredients.map(ing => typeof ing === 'string' ? ing : ing?.name || 'Unknown ingredient').join(', ')
         : 'No ingredients available';
         
     const prompt = `다음 레시피의 정확한 영양소를 계산해주세요:
@@ -121,6 +128,13 @@ async function calculateNutritionWithAI(recipe, profile) {
         }));
 
         const responseBody = JSON.parse(new TextDecoder().decode(response.body));
+        
+        // 안전장치: content 배열 확인
+        if (!responseBody.content || !Array.isArray(responseBody.content) || responseBody.content.length === 0) {
+            console.error('❌ Invalid AI response structure:', responseBody);
+            throw new Error('Invalid AI response structure');
+        }
+        
         const nutritionText = responseBody.content[0].text;
         
         console.log('🔍 AI Response:', nutritionText);
@@ -135,6 +149,12 @@ async function calculateNutritionWithAI(recipe, profile) {
         
         if (jsonMatch) {
             try {
+                // 안전장치: jsonMatch[0] 확인
+                if (!jsonMatch[0]) {
+                    console.error('❌ Empty JSON match result');
+                    throw new Error('Empty JSON match result');
+                }
+                
                 const parsed = JSON.parse(jsonMatch[0]);
                 console.log('✅ Parsed nutrition:', parsed);
                 return parsed;
@@ -144,24 +164,9 @@ async function calculateNutritionWithAI(recipe, profile) {
             }
         }
         
-        // 기본값 반환
-        console.log('⚠️ Using fallback nutrition data');
-        return {
-            nutrition: {
-                calories: 300,
-                carbs: 30,
-                protein: 15,
-                fat: 10,
-                fiber: 5,
-                sodium: 500
-            },
-            nutritionPerServing: {
-                calories: 150,
-                carbs: 15,
-                protein: 7.5,
-                fat: 5
-            }
-        };
+        // JSON을 찾지 못한 경우 에러 발생
+        console.error('❌ No valid JSON found in AI response');
+        throw new Error('No valid JSON found in AI response');
     } catch (error) {
         console.error('AI nutrition calculation failed:', error);
         throw error;
@@ -200,9 +205,21 @@ async function updateRecipeNutrition(sessionId, nutrition) {
 
         const result = await dynamoClient.send(new ScanCommand(scanParams));
         
-        if (result.Items && result.Items.length > 0) {
-            const recipeItem = result.Items[0];
-            const resultId = recipeItem.resultId.S;
+        // 안전장치: Items 배열 확인
+        if (!result.Items || !Array.isArray(result.Items) || result.Items.length === 0) {
+            console.log('⚠️ No recipe record found for sessionId:', sessionId);
+            return null;
+        }
+        
+        const recipeItem = result.Items[0];
+        
+        // 안전장치: resultId 확인
+        if (!recipeItem.resultId || !recipeItem.resultId.S) {
+            console.error('❌ Invalid recipe item structure:', recipeItem);
+            return null;
+        }
+        
+        const resultId = recipeItem.resultId.S;
             
             // 기존 레코드의 nutrition 정보 업데이트
             const updateParams = {
