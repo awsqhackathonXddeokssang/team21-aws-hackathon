@@ -40,25 +40,13 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
         # Generate recipe using Claude Opus 4.1
         recipe = generate_recipe_with_bedrock(profile)
         
-        # Get nutrition information for ingredients
-        nutrition_info = get_nutrition_info(recipe.get('ingredients', []))
-        
-        # Calculate total nutrition
-        total_nutrition = calculate_total_nutrition(nutrition_info)
-        recipe['nutrition'] = total_nutrition
-        
-        # Validate target compliance
-        compliance = validate_target_compliance(recipe, profile.get('target'))
-        recipe['targetCompliance'] = compliance
-        
         # Update session status to recipe completed
         update_session_status(session_id, 'processing', 'recipe_completed', 50)
         
         # Results 테이블에 레시피 데이터 저장
         result_data = {
             'recipe': recipe,
-            'generatedAt': datetime.now().isoformat(),
-            'nutritionInfo': nutrition_info
+            'generatedAt': datetime.now().isoformat()
         }
         save_to_results_table(session_id, result_data, profile)
 
