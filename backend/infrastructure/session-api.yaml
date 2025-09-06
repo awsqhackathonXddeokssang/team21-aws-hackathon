@@ -221,6 +221,14 @@ Resources:
       ParentId: !Ref SessionIdResource
       PathPart: 'status'
 
+  # Session Result Resource
+  SessionResultResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !Ref SessionIdResource
+      PathPart: 'result'
+
   # Process Resource
   ProcessResource:
     Type: AWS::ApiGateway::Resource
@@ -372,6 +380,48 @@ Resources:
             method.response.header.Access-Control-Allow-Methods: false
             method.response.header.Access-Control-Allow-Origin: false
 
+  # Session Result GET Method
+  SessionResultGetMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref SessionResultResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: 'arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:491085385364:function:ai-chef-result/invocations'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: false
+
+  # Session Result OPTIONS Method
+  SessionResultOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref SessionResultResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: false
+            method.response.header.Access-Control-Allow-Methods: false
+            method.response.header.Access-Control-Allow-Origin: false
+
   # POST Method
   ProcessMethod:
     Type: AWS::ApiGateway::Method
@@ -424,6 +474,15 @@ Resources:
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/GET/sessions/*/status'
+
+  # Lambda Permission for API Gateway - Session Result
+  LambdaApiGatewaySessionResultPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: 'arn:aws:lambda:us-east-1:491085385364:function:ai-chef-result'
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/GET/sessions/*/result'
 
   # Lambda Permission for API Gateway - Sessions Update
   LambdaApiGatewaySessionsUpdatePermission:
