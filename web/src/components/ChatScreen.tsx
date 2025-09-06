@@ -573,7 +573,7 @@ export default function ChatScreen() {
     
     return recommendationsData.optimalVendors
       .flatMap((vendor: any) => vendor.items)
-      .filter((item: any) => checkedItems[item.ingredient])
+      .filter((item: any) => checkedItems[item.ingredient] ?? true)
       .reduce((total: number, item: any) => total + (item.price || 0), 0);
   };
 
@@ -1100,7 +1100,10 @@ export default function ChatScreen() {
                     <div className="max-w-2xl mx-auto flex justify-between items-center">
                       <div>
                         <p className="text-sm text-gray-600">
-                          선택한 재료 ({Object.values(checkedItems).filter(Boolean).length}/{
+                          선택한 재료 ({
+                            recommendationsData?.optimalVendors?.flatMap((v: any) => v.items)
+                              .filter((item: any) => checkedItems[item.ingredient] ?? true).length || 0
+                          }/{
                             recommendationsData?.optimalVendors?.reduce((sum: number, v: any) => sum + v.items.length, 0) || 0
                           }개)
                         </p>

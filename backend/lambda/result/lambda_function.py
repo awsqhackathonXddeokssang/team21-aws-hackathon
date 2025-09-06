@@ -52,8 +52,9 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
                 return create_error_response(500, "RESULT_NOT_FOUND", "결과를 찾을 수 없습니다.")
                 
         elif session_status == 'processing':
-            # 처리 중인 경우 진행 상태 반환
-            return create_progress_response(session)
+            # 처리 중인 경우 부분 완료된 결과도 함께 반환
+            partial_result = get_final_result(session_id)
+            return create_progress_with_partial_result(session, partial_result)
             
         elif session_status == 'failed':
             # 실패한 경우 에러 정보 반환
