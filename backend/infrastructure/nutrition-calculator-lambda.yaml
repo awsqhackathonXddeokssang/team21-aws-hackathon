@@ -1,0 +1,37 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'AI Chef Nutrition Calculator Lambda with OpenSearch integration'
+
+Resources:
+  NutritionCalculatorLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: ai-chef-nutrition-calculator-cf
+      Runtime: nodejs18.x
+      Handler: index.handler
+      Role: !Sub 'arn:aws:iam::${AWS::AccountId}:role/ai-chef-lambda-role'
+      Code:
+        ZipFile: |
+          exports.handler = async (event) => {
+            return { statusCode: 200, body: 'Placeholder' };
+          };
+      Description: 'AI Chef nutrition calculator Lambda with OpenSearch integration'
+      Timeout: 30
+      MemorySize: 256
+      Environment:
+        Variables:
+          DYNAMODB_TABLE: ai-chef-sessions
+          RESULTS_TABLE: ai-chef-results
+          OPENSEARCH_ENDPOINT: !Sub 'https://search-ai-chef-opensearch-${AWS::AccountId}.us-east-1.es.amazonaws.com'
+
+  NutritionCalculatorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${NutritionCalculatorLambda}'
+      RetentionInDays: 7
+
+Outputs:
+  NutritionCalculatorLambdaArn:
+    Description: 'Nutrition Calculator Lambda ARN'
+    Value: !GetAtt NutritionCalculatorLambda.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-NutritionCalculatorLambdaArn'
