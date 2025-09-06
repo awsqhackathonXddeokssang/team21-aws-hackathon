@@ -3,6 +3,7 @@ import boto3
 from datetime import datetime
 import logging
 from typing import Dict, Any, Optional
+from decimal import Decimal
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -13,6 +14,12 @@ dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
 # DynamoDB 테이블
 sessions_table = dynamodb.Table('ai-chef-sessions')
 results_table = dynamodb.Table('ai-chef-results')
+
+def decimal_default(obj):
+    """JSON 직렬화를 위한 Decimal 변환"""
+    if isinstance(obj, Decimal):
+        return float(obj)
+    raise TypeError
 
 def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
     """Result Lambda - 세션 결과 조회"""
@@ -65,9 +72,28 @@ def get_session_status(session_id: str) -> Optional[Dict[str, Any]]:
 def get_final_result(session_id: str) -> Optional[Dict[str, Any]]:
     """최종 결과 조회"""
     try:
-        response = results_table.get_item(Key={'sessionId': session_id})
-        item = response.get('Item')
-        return item.get('result') if item else None
+        # sessionId로 scan하여 모든 결과 조회
+        response = results_table.scan(
+            FilterExpression='sessionId = :sessionId',
+            ExpressionAttributeValues={':sessionId': session_id}
+        )
+        
+        items = response.get('Items', [])
+        if not items:
+            return None
+            
+        # 결과를 타입별로 정리
+        result = {}
+        for item in items:
+            item_type = item.get('type')
+            if item_type == 'recipe':
+                result['recipe'] = json.loads(item.get('recipe', '{}'))
+            elif item_type == 'price':
+                result['price'] = item.get('data', {})
+            elif item_type == 'image':
+                result['image'] = item.get('data', {})
+                
+        return result if result else None
     except Exception as e:
         logger.error(f"Final result retrieval error: {e}")
         return None
@@ -87,7 +113,7 @@ def create_success_response(result: Dict[str, Any], session: Dict[str, Any]) -> 
             'result': result,
             'completedAt': session.get('updatedAt'),
             'processingTime': calculate_processing_time(session)
-        })
+        }, default=decimal_default)
     }
 
 def create_progress_response(session: Dict[str, Any]) -> Dict[str, Any]:
@@ -109,7 +135,7 @@ def create_progress_response(session: Dict[str, Any]) -> Dict[str, Any]:
             },
             'startedAt': session.get('createdAt'),
             'updatedAt': session.get('updatedAt')
-        })
+        }, default=decimal_default)
     }
 
 def create_error_response(status_code: int, error_code: str, message: str) -> Dict[str, Any]:

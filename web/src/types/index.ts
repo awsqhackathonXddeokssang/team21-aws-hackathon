@@ -112,4 +112,22 @@ export interface Session {
     cookingTime?: number;
     budget?: number;
   };
+  status: 'created' | 'idle' | 'processing' | 'completed' | 'failed';
+  nutritionStatus: 'pending' | 'processing' | 'completed' | 'failed';
+  recipeStatus: 'pending' | 'processing' | 'completed' | 'failed';
+  imageStatus: 'pending' | 'processing' | 'completed' | 'failed';
+  priceStatus: 'pending' | 'processing' | 'completed' | 'failed';
+}
+
+// 세션 상태 추적
+export interface SessionStatus {
+  sessionId: string;
+  status: 'created' | 'idle' | 'processing' | 'completed' | 'failed';
+  nutritionStatus: 'pending' | 'processing' | 'completed' | 'failed';
+  recipeStatus: 'pending' | 'processing' | 'completed' | 'failed';
+  imageStatus: 'pending' | 'processing' | 'completed' | 'failed';
+  priceStatus: 'pending' | 'processing' | 'completed' | 'failed';
+  progress?: number;
+  phase?: string;
+  error?: string;
 }

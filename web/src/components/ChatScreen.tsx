@@ -72,7 +72,9 @@ export default function ChatScreen() {
         const statusResponse = await fetch(statusUrl);
         const responseData = await statusResponse.json();
         console.log(`📊 Status response:`, responseData);
-        const { status, error } = responseData;
+        console.log(`🔍 Available fields:`, Object.keys(responseData));
+        console.log(`🔍 recipeStatus value:`, responseData.recipeStatus);
+        const { status, recipeStatus, error } = responseData;
 
         const progressInfo = getProgressInfo(status);
         console.log(`📈 Progress info:`, progressInfo);
@@ -80,7 +82,8 @@ export default function ChatScreen() {
         setProgressMessage(progressInfo.message);
         console.log('🔸 Current render states - showResult:', showResult, 'isLoading:', isLoading, 'currentRecipe:', !!currentRecipe);
 
-        if (status === 'completed') {
+        if (recipeStatus === 'completed' || (status === 'completed' && !recipeStatus)) {
+          console.log('🎯 Recipe completed, transitioning to result screen');
           clearInterval(pollInterval);
           
           // 실제 결과 조회 API
@@ -1233,6 +1236,26 @@ export default function ChatScreen() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ResultModal */}
+      {currentRecipe && selectedTarget && sessionId && (
+        <ResultModal
+          recipe={currentRecipe}
+          target={selectedTarget}
+          sessionId={sessionId}
+          onClose={() => setCurrentRecipe(null)}
+          onNewRecipe={() => {
+            setCurrentRecipe(null);
+            setShowResult(false);
+            setIsLoading(false);
+            setMessages([]);
+            setCurrentStep(0);
+            setConversationPhase('target');
+            setSelectedTarget(null);
+            initializeSession();
+          }}
+        />
       )}
     </div>
   );

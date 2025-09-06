@@ -1,17 +1,39 @@
 'use client';
 
-import { Recipe, UserTarget } from '@/types';
-import { X, Clock, Users, ChefHat, ExternalLink, RefreshCw, Heart, Share2 } from 'lucide-react';
+import { Recipe, UserTarget, SessionStatus } from '@/types';
+import { X, Clock, Users, ChefHat, ExternalLink, RefreshCw, Heart, Share2, Loader2 } from 'lucide-react';
 import clsx from 'clsx';
+import { useState, useEffect } from 'react';
+import { API_CONFIG } from '@/config/api';
 
 interface ResultModalProps {
   recipe: Recipe;
   target: UserTarget;
+  sessionId: string;
   onClose: () => void;
   onNewRecipe: () => void;
 }
 
-export default function ResultModal({ recipe, target, onClose, onNewRecipe }: ResultModalProps) {
+export default function ResultModal({ recipe, target, sessionId, onClose, onNewRecipe }: ResultModalProps) {
+  const [activeTab, setActiveTab] = useState<'recipe' | 'nutrition' | 'price'>('recipe');
+  const [sessionStatus, setSessionStatus] = useState<SessionStatus | null>(null);
+
+  const pollSessionStatus = async () => {
+    try {
+      const response = await fetch(`${API_CONFIG.BASE_URL}/sessions/${sessionId}/status`);
+      const data = await response.json();
+      setSessionStatus(data);
+    } catch (error) {
+      console.error('Status polling error:', error);
+    }
+  };
+
+  useEffect(() => {
+    pollSessionStatus();
+    const interval = setInterval(pollSessionStatus, 3000);
+    return () => clearInterval(interval);
+  }, [sessionId]);
+
   const getDifficultyColor = (difficulty: string) => {
     const colors = {
       easy: 'text-green-600 bg-green-100',
@@ -126,114 +148,174 @@ export default function ResultModal({ recipe, target, onClose, onNewRecipe }: Re
           </div>
         </div>
 
+        {/* 탭 네비게이션 */}
+        <div className="flex border-b border-gray-200">
+          <button
+            onClick={() => setActiveTab('recipe')}
+            className={clsx(
+              "px-6 py-3 font-medium text-sm border-b-2 transition-colors",
+              activeTab === 'recipe' 
+                ? "border-emerald-500 text-emerald-600" 
+                : "border-transparent text-gray-500 hover:text-gray-700"
+            )}
+          >
+            🍳 레시피
+          </button>
+          <button
+            onClick={() => setActiveTab('nutrition')}
+            className={clsx(
+              "px-6 py-3 font-medium text-sm border-b-2 transition-colors",
+              activeTab === 'nutrition' 
+                ? "border-emerald-500 text-emerald-600" 
+                : "border-transparent text-gray-500 hover:text-gray-700"
+            )}
+          >
+            📊 영양정보
+          </button>
+          <button
+            onClick={() => setActiveTab('price')}
+            className={clsx(
+              "px-6 py-3 font-medium text-sm border-b-2 transition-colors",
+              activeTab === 'price' 
+                ? "border-emerald-500 text-emerald-600" 
+                : "border-transparent text-gray-500 hover:text-gray-700"
+            )}
+          >
+            💰 가격정보
+          </button>
+        </div>
+
         <div className="p-6 space-y-6">
-          {/* 기본 정보 */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="flex items-center space-x-2 text-sm">
-              <Clock className="w-4 h-4 text-gray-500" />
-              <span>{recipe.cookingTime}분</span>
-            </div>
-            <div className="flex items-center space-x-2 text-sm">
-              <Users className="w-4 h-4 text-gray-500" />
-              <span>{recipe.servings}인분</span>
-            </div>
-            <div className="flex items-center space-x-2 text-sm">
-              <ChefHat className="w-4 h-4 text-gray-500" />
-              <span className={clsx(
-                "px-2 py-1 rounded-full text-xs font-medium",
-                getDifficultyColor(recipe.difficulty)
-              )}>
-                {getDifficultyText(recipe.difficulty)}
-              </span>
-            </div>
-            <div className="text-sm">
-              <span className="text-gray-500">총 가격:</span>
-              <span className="font-bold text-emerald-600 ml-1">
-                {recipe.totalPrice.toLocaleString()}원
-              </span>
-            </div>
-          </div>
+          {/* 레시피 탭 */}
+          {activeTab === 'recipe' && (
+            <>
+              {/* 기본 정보 */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="flex items-center space-x-2 text-sm">
+                  <Clock className="w-4 h-4 text-gray-500" />
+                  <span>{recipe.cookingTime}분</span>
+                </div>
+                <div className="flex items-center space-x-2 text-sm">
+                  <Users className="w-4 h-4 text-gray-500" />
+                  <span>{recipe.servings}인분</span>
+                </div>
+                <div className="flex items-center space-x-2 text-sm">
+                  <ChefHat className="w-4 h-4 text-gray-500" />
+                  <span className={clsx(
+                    "px-2 py-1 rounded-full text-xs font-medium",
+                    getDifficultyColor(recipe.difficulty)
+                  )}>
+                    {getDifficultyText(recipe.difficulty)}
+                  </span>
+                </div>
+                <div className="text-sm">
+                  <span className="text-gray-500">총 가격:</span>
+                  <span className="font-bold text-emerald-600 ml-1">
+                    {recipe.totalPrice.toLocaleString()}원
+                  </span>
+                </div>
+              </div>
 
-          {/* 타겟별 특화 정보 */}
-          {getTargetSpecificInfo()}
+              {/* 타겟별 특화 정보 */}
+              {getTargetSpecificInfo()}
 
-          {/* 영양 정보 */}
-          <div className="bg-gray-50 rounded-lg p-4">
-            <h4 className="font-semibold text-gray-800 mb-3">📊 영양 정보 (1인분)</h4>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-              <div className="text-center">
-                <div className="font-bold text-lg text-gray-800">{recipe.nutrition.calories}</div>
-                <div className="text-gray-600">칼로리</div>
-              </div>
-              <div className="text-center">
-                <div className="font-bold text-lg text-gray-800">{recipe.nutrition.carbs}g</div>
-                <div className="text-gray-600">탄수화물</div>
-              </div>
-              <div className="text-center">
-                <div className="font-bold text-lg text-gray-800">{recipe.nutrition.protein}g</div>
-                <div className="text-gray-600">단백질</div>
-              </div>
-              <div className="text-center">
-                <div className="font-bold text-lg text-gray-800">{recipe.nutrition.fat}g</div>
-                <div className="text-gray-600">지방</div>
-              </div>
-            </div>
-          </div>
-
-          {/* 재료 및 가격 */}
-          <div>
-            <h4 className="font-semibold text-gray-800 mb-3">🛒 재료 및 가격</h4>
-            <div className="space-y-3">
-              {recipe.ingredients.map((ingredient, index) => (
-                <div key={index} className="ingredient-item">
-                  <div className="flex-1">
-                    <div className="font-medium text-gray-800">
-                      {ingredient.name} {ingredient.amount}{ingredient.unit}
+              {/* 조리법 */}
+              <div>
+                <h4 className="font-semibold text-gray-800 mb-3">👨🍳 조리법</h4>
+                <div className="space-y-3">
+                  {recipe.instructions.map((instruction, index) => (
+                    <div key={index} className="flex space-x-3">
+                      <div className="flex-shrink-0 w-6 h-6 bg-emerald-500 text-white rounded-full flex items-center justify-center text-sm font-medium">
+                        {index + 1}
+                      </div>
+                      <p className="text-gray-700 leading-relaxed">{instruction}</p>
                     </div>
-                    <div className="text-sm text-gray-500">{ingredient.store}</div>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <span className="price-badge">
-                      {ingredient.price ? ingredient.price.toLocaleString() : '0'}원
+                  ))}
+                </div>
+              </div>
+
+              {/* 태그 */}
+              <div>
+                <h4 className="font-semibold text-gray-800 mb-3">🏷️ 태그</h4>
+                <div className="flex flex-wrap gap-2">
+                  {recipe.tags.map((tag, index) => (
+                    <span
+                      key={index}
+                      className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm"
+                    >
+                      #{tag}
                     </span>
-                    <button className="p-1 hover:bg-gray-200 rounded">
-                      <ExternalLink className="w-4 h-4 text-gray-500" />
-                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* 영양정보 탭 */}
+          {activeTab === 'nutrition' && (
+            sessionStatus?.nutritionStatus === 'completed' ? (
+              <div className="bg-gray-50 rounded-lg p-4">
+                <h4 className="font-semibold text-gray-800 mb-3">📊 영양 정보 (1인분)</h4>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div className="text-center">
+                    <div className="font-bold text-lg text-gray-800">{recipe.nutrition.calories}</div>
+                    <div className="text-gray-600">칼로리</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="font-bold text-lg text-gray-800">{recipe.nutrition.carbs}g</div>
+                    <div className="text-gray-600">탄수화물</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="font-bold text-lg text-gray-800">{recipe.nutrition.protein}g</div>
+                    <div className="text-gray-600">단백질</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="font-bold text-lg text-gray-800">{recipe.nutrition.fat}g</div>
+                    <div className="text-gray-600">지방</div>
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-12">
+                <Loader2 className="w-8 h-8 animate-spin text-emerald-500 mb-4" />
+                <p className="text-gray-600">영양 정보를 분석하고 있어요...</p>
+              </div>
+            )
+          )}
 
-          {/* 조리법 */}
-          <div>
-            <h4 className="font-semibold text-gray-800 mb-3">👨‍🍳 조리법</h4>
-            <div className="space-y-3">
-              {recipe.instructions.map((instruction, index) => (
-                <div key={index} className="flex space-x-3">
-                  <div className="flex-shrink-0 w-6 h-6 bg-emerald-500 text-white rounded-full flex items-center justify-center text-sm font-medium">
-                    {index + 1}
-                  </div>
-                  <p className="text-gray-700 leading-relaxed">{instruction}</p>
+          {/* 가격정보 탭 */}
+          {activeTab === 'price' && (
+            sessionStatus?.priceStatus === 'completed' ? (
+              <div>
+                <h4 className="font-semibold text-gray-800 mb-3">🛒 재료 및 가격</h4>
+                <div className="space-y-3">
+                  {recipe.ingredients.map((ingredient, index) => (
+                    <div key={index} className="ingredient-item">
+                      <div className="flex-1">
+                        <div className="font-medium text-gray-800">
+                          {ingredient.name} {ingredient.amount}{ingredient.unit}
+                        </div>
+                        <div className="text-sm text-gray-500">{ingredient.store}</div>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <span className="price-badge">
+                          {ingredient.price ? ingredient.price.toLocaleString() : '0'}원
+                        </span>
+                        <button className="p-1 hover:bg-gray-200 rounded">
+                          <ExternalLink className="w-4 h-4 text-gray-500" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </div>
-
-          {/* 태그 */}
-          <div>
-            <h4 className="font-semibold text-gray-800 mb-3">🏷️ 태그</h4>
-            <div className="flex flex-wrap gap-2">
-              {recipe.tags.map((tag, index) => (
-                <span
-                  key={index}
-                  className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm"
-                >
-                  #{tag}
-                </span>
-              ))}
-            </div>
-          </div>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-12">
+                <Loader2 className="w-8 h-8 animate-spin text-emerald-500 mb-4" />
+                <p className="text-gray-600">최저가 정보를 조회하고 있어요...</p>
+              </div>
+            )
+          )}
         </div>
 
         {/* 액션 버튼들 */}
