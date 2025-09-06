@@ -8,6 +8,12 @@ from decimal import Decimal
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
+def decimal_default(obj):
+    """JSON serializer for Decimal objects"""
+    if isinstance(obj, Decimal):
+        return float(obj)
+    raise TypeError
+
 # AWS 클라이언트 초기화
 dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
 
@@ -150,7 +156,7 @@ def create_error_response(status_code: int, error_code: str, message: str) -> Di
             'success': False,
             'error': error_code,
             'message': message
-        })
+        }, default=decimal_default)
     }
 
 def get_phase_message(phase: str) -> str:
