@@ -29,6 +29,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Delete
     Properties:
+      FunctionName: 'ai-chef-session-create'
       Runtime: nodejs18.x
       Handler: index.handler
       Role: !GetAtt SessionCreateLambdaRole.Arn
