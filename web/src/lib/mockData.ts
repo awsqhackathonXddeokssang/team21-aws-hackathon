@@ -128,6 +128,109 @@ export const sampleRecipes: Partial<Record<UserTarget, Recipe[]>> = {
         diabetes: { glycemicIndex: 45, bloodSugarImpact: 'low' }
       }
     }
+  ],
+  general: [
+    {
+      id: 'general-1',
+      name: '김치찌개',
+      description: '집에서 쉽게 만드는 따뜻한 김치찌개',
+      cookingTime: 30,
+      difficulty: 'easy',
+      servings: 3,
+      ingredients: [
+        { name: '신김치', amount: '300', unit: 'g', price: 3500, store: '네이버쇼핑', url: '#' },
+        { name: '돼지고기', amount: '200', unit: 'g', price: 5500, store: '네이버쇼핑', url: '#' },
+        { name: '두부', amount: '1/2', unit: '모', price: 2000, store: '네이버쇼핑', url: '#' },
+        { name: '대파', amount: '1', unit: '대', price: 800, store: '네이버쇼핑', url: '#' },
+        { name: '양파', amount: '1/2', unit: '개', price: 600, store: '네이버쇼핑', url: '#' }
+      ],
+      instructions: [
+        '김치를 적당한 크기로 자릅니다.',
+        '돼지고기를 한입 크기로 썰어줍니다.',
+        '냄비에 기름을 두르고 돼지고기를 볶습니다.',
+        '김치와 물을 넣고 끓입니다.',
+        '두부와 파, 양파를 넣고 20분간 끓입니다.'
+      ],
+      nutrition: { calories: 320, carbs: 12, protein: 28, fat: 18, fiber: 4 },
+      tags: ['한식', '전통요리', '찌개'],
+      totalPrice: 12400
+    },
+    {
+      id: 'general-2',
+      name: '치킨 샐러드',
+      description: '신선한 야채와 구운 치킨의 조화',
+      cookingTime: 15,
+      difficulty: 'easy',
+      servings: 2,
+      ingredients: [
+        { name: '닭가슴살', amount: '200', unit: 'g', price: 6500, store: '네이버쇼핑', url: '#' },
+        { name: '샐러드 야채', amount: '150', unit: 'g', price: 3500, store: '네이버쇼핑', url: '#' },
+        { name: '방울토마토', amount: '100', unit: 'g', price: 2800, store: '네이버쇼핑', url: '#' },
+        { name: '드레싱', amount: '3', unit: 'tbsp', price: 1500, store: '네이버쇼핑', url: '#' }
+      ],
+      instructions: [
+        '닭가슴살을 소금, 후추로 밑간합니다.',
+        '팬에 기름을 두르고 닭가슴살을 구워줍니다.',
+        '샐러드 야채를 씫고 방울토마토를 반으로 자릅니다.',
+        '구운 닭가슴살을 써어 야채 위에 올립니다.',
+        '드레싱을 뿌려 완성합니다.'
+      ],
+      nutrition: { calories: 280, carbs: 8, protein: 35, fat: 12, fiber: 3 },
+      tags: ['다이어트', '샐러드', '건강식'],
+      totalPrice: 14300
+    }
+  ],
+  fridge: [
+    {
+      id: 'fridge-1',
+      name: '계란 볶음밥',
+      description: '냉장고 속 재료로 만드는 간단 볶음밥',
+      cookingTime: 15,
+      difficulty: 'easy',
+      servings: 2,
+      ingredients: [
+        { name: '밥', amount: '2', unit: '공기', price: 0, store: '집에 있음', url: '#' },
+        { name: '계란', amount: '3', unit: '개', price: 1800, store: '네이버쇼핑', url: '#' },
+        { name: '대파', amount: '1', unit: '대', price: 500, store: '네이버쇼핑', url: '#' },
+        { name: '간장', amount: '2', unit: 'tbsp', price: 0, store: '집에 있음', url: '#' },
+        { name: '참기름', amount: '1', unit: 'tbsp', price: 0, store: '집에 있음', url: '#' }
+      ],
+      instructions: [
+        '계란을 풀어 스크램블 에그를 만듭니다.',
+        '팬에 기름을 두르고 계란을 볶습니다.',
+        '밥을 넣고 잔열로 볶습니다.',
+        '간장과 참기름으로 간을 맞춥니다.',
+        '대파를 송송 썰어 고명으로 올려 완성합니다.'
+      ],
+      nutrition: { calories: 380, carbs: 52, protein: 15, fat: 12, fiber: 2 },
+      tags: ['간편요리', '냉장고파먹기', '볶음밥'],
+      totalPrice: 2300
+    },
+    {
+      id: 'fridge-2',
+      name: '잡채 라면',
+      description: '냉장고 속 야채로 영양 더한 라면',
+      cookingTime: 10,
+      difficulty: 'easy',
+      servings: 1,
+      ingredients: [
+        { name: '라면', amount: '1', unit: '개', price: 1200, store: '네이버쇼핑', url: '#' },
+        { name: '양배추', amount: '50', unit: 'g', price: 500, store: '네이버쇼핑', url: '#' },
+        { name: '당근', amount: '30', unit: 'g', price: 300, store: '네이버쇼핑', url: '#' },
+        { name: '파', amount: '1/2', unit: '대', price: 200, store: '네이버쇼핑', url: '#' },
+        { name: '계란', amount: '1', unit: '개', price: 600, store: '네이버쇼핑', url: '#' }
+      ],
+      instructions: [
+        '물을 끓여 라면을 넣습니다.',
+        '양배추, 당근을 채 썰어 준비합니다.',
+        '라면이 끓기 시작하면 야채를 넣습니다.',
+        '계란을 풀어 넣습니다.',
+        '파를 송송 썰어 고명으로 올려 완성합니다.'
+      ],
+      nutrition: { calories: 420, carbs: 58, protein: 12, fat: 15, fiber: 3 },
+      tags: ['야식', '간편식', '라면'],
+      totalPrice: 2800
+    }
   ]
 };
 

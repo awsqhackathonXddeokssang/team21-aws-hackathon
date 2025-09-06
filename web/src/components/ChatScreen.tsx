@@ -74,15 +74,13 @@ export default function ChatScreen() {
           return;
         }
         
-        // 상태 체크
-        const statusResponse = await fetch(`${API_CONFIG.BASE_URL}/sessions/${currentSessionId}/status`);
-        const statusData = await statusResponse.json();
+        // 상태 체크 (Mock)
+        const statusData = await ApiService.getSessionStatus(currentSessionId);
         setSessionStatus(statusData);
         
         // 레시피 데이터가 아직 없으면 계속 가져오기 시도
         if (!currentRecipe || !currentRecipe.name) {
-          const resultResponse = await fetch(`${API_CONFIG.BASE_URL}/sessions/${currentSessionId}/result`);
-          const resultData = await resultResponse.json();
+          const resultData = await ApiService.getSessionResult(currentSessionId);
           
           if (resultData.result?.recipe) {
             console.log('✅ Recipe data now available!');
@@ -110,8 +108,7 @@ export default function ChatScreen() {
         
         // 영양정보 완료 체크
         if (statusData.nutritionStatus === 'completed' && !nutritionData) {
-          const resultResponse = await fetch(`${API_CONFIG.BASE_URL}/sessions/${sessionId}/result`);
-          const resultData = await resultResponse.json();
+          const resultData = await ApiService.getSessionResult(sessionId);
           if (resultData.result?.nutrition) {
             setNutritionData(resultData.result.nutrition);
           }
@@ -119,8 +116,7 @@ export default function ChatScreen() {
         
         // 가격정보 완료 체크
         if (statusData.priceStatus === 'completed' && !priceData) {
-          const resultResponse = await fetch(`${API_CONFIG.BASE_URL}/sessions/${sessionId}/result`);
-          const resultData = await resultResponse.json();
+          const resultData = await ApiService.getSessionResult(sessionId);
           if (resultData.result?.price) {
             setPriceData(resultData.result.price);
             // recommendations 데이터 저장
@@ -132,10 +128,9 @@ export default function ChatScreen() {
 
         // 이미지 정보 완료 체크
         if (statusData.imageStatus === 'completed' && !imageData) {
-          const resultResponse = await fetch(`${API_CONFIG.BASE_URL}/sessions/${sessionId}/result`);
-          const resultData = await resultResponse.json();
-          if (resultData.result?.image) {
-            setImageData(resultData.result.image);
+          const resultData = await ApiService.getSessionResult(sessionId);
+          if (resultData.result?.imageUrl) {
+            setImageData({ imageUrl: resultData.result.imageUrl });
           }
         }
         
@@ -164,12 +159,9 @@ export default function ChatScreen() {
 
         console.log(`🔄 Poll #${pollCount} - fetching status for sessionId:`, sessionId);
         
-        // 실제 API 호출
-        const statusUrl = `${API_CONFIG.BASE_URL}/sessions/${sessionId}/status`;
-        console.log('🌐 Status URL:', statusUrl);
-        const statusResponse = await fetch(statusUrl);
-        const responseData = await statusResponse.json();
-        console.log(`📊 Status response:`, responseData);
+        // Mock API 호출
+        const responseData = await ApiService.getSessionStatus(sessionId);
+        console.log(`📊 Mock Status response:`, responseData);
         console.log(`🔍 Available fields:`, Object.keys(responseData));
         console.log(`🔍 status value:`, responseData.status);
         console.log(`🔍 recipeStatus value:`, responseData.recipeStatus);
@@ -186,9 +178,8 @@ export default function ChatScreen() {
           console.log('🎯 Recipe completed, transitioning to result screen');
           clearInterval(pollInterval);
           
-          // 실제 결과 조회 API
-          const resultResponse = await fetch(`${API_CONFIG.BASE_URL}/sessions/${sessionId}/result`);
-          const recipeResult = await resultResponse.json();
+          // Mock 결과 조회
+          const recipeResult = await ApiService.getSessionResult(sessionId);
           console.log('📦 Result API response:', recipeResult);
           
           // 결과 캐싱
@@ -217,6 +208,25 @@ export default function ChatScreen() {
               totalPrice: recipeResult.result.price?.recommendations?.totalEstimatedCost
             };
             setCurrentRecipe(recipe);
+            
+            // 이미지 데이터도 설정
+            if (recipeResult.result?.imageUrl) {
+              setImageData({ imageUrl: recipeResult.result.imageUrl });
+              console.log('🖼️ Image data set:', recipeResult.result.imageUrl);
+            }
+            
+            // 가격 데이터 설정
+            if (recipeResult.result?.price) {
+              setPriceData(recipeResult.result.price);
+              if (recipeResult.result.price?.recommendations) {
+                setRecommendationsData(recipeResult.result.price.recommendations);
+              }
+            }
+            
+            // 영양 데이터 설정
+            if (recipeResult.result?.nutrition) {
+              setNutritionData(recipeResult.result.nutrition);
+            }
           } else {
             console.log('⚠️ Recipe data not yet available, will continue polling');
             // 레시피 데이터가 없어도 결과 화면으로 전환
@@ -1038,12 +1048,18 @@ export default function ChatScreen() {
                                   className="mt-1 mr-3 w-4 h-4 text-orange-600 rounded focus:ring-orange-500"
                                 />
                                 
-                                {item.image && (
-                                  <img 
-                                    src={item.image} 
-                                    alt={item.name}
-                                    className="w-16 h-16 object-cover rounded mr-3"
-                                  />
+                                {(item.emoji || item.image) && (
+                                  <div className="w-16 h-16 flex items-center justify-center bg-gray-100 rounded mr-3">
+                                    {item.emoji ? (
+                                      <span className="text-3xl">{item.emoji}</span>
+                                    ) : item.image ? (
+                                      <img 
+                                        src={item.image} 
+                                        alt={item.name}
+                                        className="w-full h-full object-cover rounded"
+                                      />
+                                    ) : null}
+                                  </div>
                                 )}
                                 
                                 <div className="flex-1">
