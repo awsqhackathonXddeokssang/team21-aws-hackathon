@@ -25,6 +25,14 @@ aws cloudformation deploy \
   --region ${REGION}
 
 # TEMPORARILY DISABLED - Deploy only session-create and session-update Lambda
+# Deploy Price Lambda
+echo "💰 Deploying Price Lambda..."
+aws cloudformation deploy \
+  --template-file price-lambda.yaml \
+  --stack-name ai-chef-price-lambda \
+  --capabilities CAPABILITY_IAM \
+  --region ${REGION}
+
 # # Deploy Recipe Lambda
 # echo "📦 Deploying Recipe Lambda..."
 # aws cloudformation deploy \
@@ -61,3 +69,4 @@ echo "✅ Lambda Functions deployed successfully!"
 echo "📊 Functions deployed:"
 echo "  - ai-chef-session-create"
 echo "  - ai-chef-session-update"
+echo "  - ai-chef-price"

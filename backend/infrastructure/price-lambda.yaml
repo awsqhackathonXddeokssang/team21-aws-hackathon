@@ -1,7 +1,32 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'AI Chef Price Lambda Function - Secrets Manager Version'
+Description: 'AI Chef Price Lambda Function'
 
 Resources:
+  # CloudWatch Log Group (표준)
+  PriceLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: '/aws/lambda/ai-chef-price'
+      RetentionInDays: 7
+
+  # CloudWatch Alarm (표준)
+  PriceErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: 'AI-Chef-Price-Errors'
+      AlarmDescription: 'Error monitoring for Price Lambda'
+      MetricName: 'Errors'
+      Namespace: 'AWS/Lambda'
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 3
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref PriceLambda
+      TreatMissingData: notBreaching
+
   # Naver API Secrets
   NaverApiSecrets:
     Type: AWS::SecretsManager::Secret
@@ -56,7 +81,7 @@ Resources:
     Properties:
       FunctionName: 'ai-chef-price'
       Runtime: python3.11
-      Handler: lambda_function.lambda_handler
+      Handler: index.lambda_handler
       Role: !GetAtt PriceLambdaRole.Arn
       Timeout: 30
       MemorySize: 256
@@ -65,8 +90,64 @@ Resources:
           NAVER_API_SECRET_NAME: !Ref NaverApiSecrets
           SESSIONS_TABLE_NAME: 'ai-chef-sessions'
       Code:
-        S3Bucket: !Sub 'ai-chef-lambda-code-${AWS::AccountId}'
-        S3Key: 'price/lambda-package.zip'
+        ZipFile: |
+          import json
+          import boto3
+          import requests
+          import os
+          from datetime import datetime
+          
+          def lambda_handler(event, context):
+              print(f'Price Lambda 요청: {json.dumps(event)}')
+              
+              try:
+                  # 세션 ID 추출
+                  session_id = event.get('sessionId')
+                  ingredients = event.get('ingredients', [])
+                  
+                  if not session_id or not ingredients:
+                      return {
+                          'statusCode': 400,
+                          'body': json.dumps({'error': 'sessionId와 ingredients가 필요합니다'})
+                      }
+                  
+                  # 네이버 쇼핑 API 호출 (간단한 예시)
+                  price_results = []
+                  for ingredient in ingredients:
+                      price_results.append({
+                          'name': ingredient,
+                          'price': 1000,  # 임시 가격
+                          'url': 'https://shopping.naver.com'
+                      })
+                  
+                  # DynamoDB 업데이트
+                  dynamodb = boto3.resource('dynamodb')
+                  table = dynamodb.Table(os.environ['SESSIONS_TABLE_NAME'])
+                  
+                  table.update_item(
+                      Key={'sessionId': session_id},
+                      UpdateExpression='SET priceResults = :prices, priceStatus = :status, lastActivity = :time',
+                      ExpressionAttributeValues={
+                          ':prices': price_results,
+                          ':status': 'completed',
+                          ':time': datetime.utcnow().isoformat() + 'Z'
+                      }
+                  )
+                  
+                  return {
+                      'statusCode': 200,
+                      'body': json.dumps({
+                          'sessionId': session_id,
+                          'priceResults': price_results
+                      })
+                  }
+                  
+              except Exception as error:
+                  print(f'Price Lambda 오류: {str(error)}')
+                  return {
+                      'statusCode': 500,
+                      'body': json.dumps({'error': '가격 조회 중 오류가 발생했습니다'})
+                  }
 
 Outputs:
   PriceLambdaArn:
