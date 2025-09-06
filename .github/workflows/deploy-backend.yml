@@ -2,6 +2,11 @@ name: Deploy Backend Infrastructure
 
 on:
   push:
+    paths:
+      - 'backend/infrastructure/session-create-lambda.yaml'
+      - 'backend/infrastructure/deploy.sh'
+      - '.github/workflows/deploy-backend.yml'
+  workflow_dispatch:
 
 jobs:
   deploy:
