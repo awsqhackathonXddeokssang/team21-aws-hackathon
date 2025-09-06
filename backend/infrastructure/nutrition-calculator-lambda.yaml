@@ -5,18 +5,21 @@ Resources:
   NutritionCalculatorLambda:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: ai-chef-nutrition-calculator-cf
-      Runtime: nodejs18.x
-      Handler: index.handler
+      FunctionName: ai-chef-nutrition-calculator
+      Runtime: python3.11
+      Handler: lambda_function.lambda_handler
       Role: !Sub 'arn:aws:iam::${AWS::AccountId}:role/ai-chef-lambda-role'
       Code:
         ZipFile: |
-          exports.handler = async (event) => {
-            return { statusCode: 200, body: 'Placeholder' };
-          };
+          import json
+          def lambda_handler(event, context):
+            return {
+              'statusCode': 200,
+              'body': json.dumps('Placeholder')
+            }
       Description: 'AI Chef nutrition calculator Lambda with OpenSearch integration'
-      Timeout: 30
-      MemorySize: 256
+      Timeout: 300
+      MemorySize: 512
       Environment:
         Variables:
           DYNAMODB_TABLE: ai-chef-sessions
