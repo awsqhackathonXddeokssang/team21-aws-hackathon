@@ -34,7 +34,10 @@ Resources:
   # Lambda Function
   ResultLambda:
     Type: AWS::Lambda::Function
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Delete
     Properties:
+      FunctionName: 'ai-chef-result'
       Runtime: python3.11
       Handler: lambda_function.lambda_handler
       Role: !GetAtt ResultLambdaRole.Arn
