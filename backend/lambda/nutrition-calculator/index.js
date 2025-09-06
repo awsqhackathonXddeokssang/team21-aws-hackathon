@@ -168,6 +168,21 @@ async function calculateNutritionWithAI(recipe, profile) {
     }
 }
 
+function convertToAttributeValue(obj) {
+    if (typeof obj === 'string') return { S: obj };
+    if (typeof obj === 'number') return { N: obj.toString() };
+    if (typeof obj === 'boolean') return { BOOL: obj };
+    if (Array.isArray(obj)) return { L: obj.map(convertToAttributeValue) };
+    if (obj && typeof obj === 'object') {
+        const result = {};
+        for (const [key, value] of Object.entries(obj)) {
+            result[key] = convertToAttributeValue(value);
+        }
+        return { M: result };
+    }
+    return { NULL: true };
+}
+
 async function updateRecipeNutrition(sessionId, nutrition) {
     try {
         // sessionId로 기존 recipe 레코드 찾기 (스캔 사용)
@@ -195,12 +210,14 @@ async function updateRecipeNutrition(sessionId, nutrition) {
                 Key: {
                     resultId: { S: resultId }
                 },
-                UpdateExpression: 'SET #data.nutrition = :nutrition, updatedAt = :updatedAt',
+                UpdateExpression: 'SET #data.#nutrition = :nutrition, #updatedAt = :updatedAt',
                 ExpressionAttributeNames: {
-                    '#data': 'data'
+                    '#data': 'data',
+                    '#nutrition': 'nutrition',
+                    '#updatedAt': 'updatedAt'
                 },
                 ExpressionAttributeValues: {
-                    ':nutrition': { S: JSON.stringify(nutrition) },
+                    ':nutrition': { M: convertToAttributeValue(nutrition) },
                     ':updatedAt': { S: new Date().toISOString() }
                 }
             };
