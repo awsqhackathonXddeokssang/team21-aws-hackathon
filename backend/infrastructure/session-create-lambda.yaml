@@ -30,7 +30,7 @@ Resources:
     UpdateReplacePolicy: Delete
     Properties:
       FunctionName: 'ai-chef-session-create'
-      Runtime: nodejs18.x
+      Runtime: nodejs14.x
       Handler: index.handler
       Role: !GetAtt SessionCreateLambdaRole.Arn
       Timeout: 30
@@ -40,17 +40,16 @@ Resources:
           SESSIONS_TABLE_NAME: 'ai-chef-sessions'
       Code:
         ZipFile: |
-          const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
-          const { DynamoDBDocumentClient, PutCommand } = require('@aws-sdk/lib-dynamodb');
-          const { randomUUID } = require('crypto');
+          const AWS = require('aws-sdk');
+          const { v4: uuidv4 } = require('uuid');
 
-          const client = new DynamoDBClient({});
-          const dynamodb = DynamoDBDocumentClient.from(client);
+          const dynamodb = new AWS.DynamoDB.DocumentClient();
           const TABLE_NAME = process.env.SESSIONS_TABLE_NAME;
 
           exports.handler = async (event) => {
             console.log('세션 생성 요청:', JSON.stringify(event, null, 2));
 
+            // CORS preflight 처리
             if (event.httpMethod === 'OPTIONS') {
               return {
                 statusCode: 200,
@@ -64,9 +63,9 @@ Resources:
             }
 
             try {
-              const sessionId = `sess_${randomUUID()}`;
+              const sessionId = `sess_${uuidv4()}`;
               const now = new Date();
-              const expiresAt = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+              const expiresAt = new Date(now.getTime() + 2 * 60 * 60 * 1000); // 2시간 후
               
               const sessionRecord = {
                 sessionId,
@@ -74,15 +73,15 @@ Resources:
                 createdAt: now.toISOString(),
                 expiresAt: expiresAt.toISOString(),
                 lastActivity: now.toISOString(),
-                ttl: Math.floor(expiresAt.getTime() / 1000),
+                ttl: Math.floor(expiresAt.getTime() / 1000), // DynamoDB TTL
                 retryCount: 0,
                 maxRetries: 3
               };
 
-              await dynamodb.send(new PutCommand({
+              await dynamodb.put({
                 TableName: TABLE_NAME,
                 Item: sessionRecord
-              }));
+              }).promise();
 
               console.log('세션 생성 완료:', sessionId);
 
