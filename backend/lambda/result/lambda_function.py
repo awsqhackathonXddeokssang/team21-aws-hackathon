@@ -94,7 +94,13 @@ def get_final_result(session_id: str) -> Optional[Dict[str, Any]]:
         for item in items:
             item_type = item.get('type')
             if item_type == 'recipe':
-                result['recipe'] = json.loads(item.get('recipe', '{}'))
+                recipe_json = item.get('recipe')
+                if not recipe_json:
+                    raise ValueError(f"Recipe data missing for session: {session_id}")
+                try:
+                    result['recipe'] = json.loads(recipe_json)
+                except json.JSONDecodeError as e:
+                    raise ValueError(f"Recipe JSON parsing failed for session {session_id}: {e}")
             elif item_type == 'price':
                 result['price'] = item.get('data', {})
             elif item_type == 'image':
