@@ -1,0 +1,52 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'AI Chef DynamoDB Tables Schema'
+
+Resources:
+  AiChefSessionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: ai-chef-sessions
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: sessionId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: sessionId
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: TTL
+        Enabled: true
+
+  AiChefResultsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: ai-chef-results
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: resultId
+          AttributeType: S
+        - AttributeName: sessionId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: resultId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: sessionId-index
+          KeySchema:
+            - AttributeName: sessionId
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+
+Outputs:
+  SessionsTableName:
+    Description: 'Sessions table name'
+    Value: !Ref AiChefSessionsTable
+    Export:
+      Name: !Sub '${AWS::StackName}-SessionsTable'
+
+  ResultsTableName:
+    Description: 'Results table name'
+    Value: !Ref AiChefResultsTable
+    Export:
+      Name: !Sub '${AWS::StackName}-ResultsTable'
